@@ -13,6 +13,7 @@ import {
   getQRForItem,
   prepareTemplateForItem,
 } from "../lib/qrWorkflow";
+import { blobManager } from "../lib/blobManager";
 
 type EmplantilladorQRProps = {
   template: TemplateDef;
@@ -221,14 +222,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     }
   }, [labelBox, template]);
 
-  // Cleanup blob URL when component unmounts or template changes
+  // Cleanup blob URL when component unmounts
   useEffect(() => {
     return () => {
-      if (templateBlobUrl) {
-        URL.revokeObjectURL(templateBlobUrl);
-      }
+      blobManager.revokeUrl('template');
     };
-  }, [templateBlobUrl]);
+  }, []);
 
   const updateFrameField = useCallback(
     (field: keyof Frame, rawValue: number) => {
@@ -471,9 +470,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     const file = event.target.files?.[0];
     if (!file) {
       // Limpiar URL anterior si existe
-      if (templateBlobUrl) {
-        URL.revokeObjectURL(templateBlobUrl);
-      }
+      blobManager.revokeUrl('template');
       setTemplateImage(null);
       setTemplateBlobUrl(null);
       return;
@@ -487,19 +484,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     
     setStatus({ type: "info", text: "Cargando plantilla..." });
     
-    // Limpiar URL anterior si existe
-    if (templateBlobUrl) {
-      URL.revokeObjectURL(templateBlobUrl);
-    }
-    
-    const url = URL.createObjectURL(file);
+    // Crear URL con el blob manager
+    const url = blobManager.createUrl(file, 'template');
     const img = new Image();
     
     img.onload = () => {
       // Verificar que la imagen tiene dimensiones válidas
       if (img.naturalWidth === 0 || img.naturalHeight === 0) {
         setStatus({ type: "error", text: "La imagen no tiene dimensiones válidas" });
-        URL.revokeObjectURL(url);
+        blobManager.revokeUrl('template');
         setTemplateImage(null);
         setTemplateBlobUrl(null);
         return;
@@ -530,14 +523,14 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     
     img.onerror = (error) => {
       console.error("Error loading template image:", error);
-      URL.revokeObjectURL(url);
+      blobManager.revokeUrl('template');
       setTemplateImage(null);
       setTemplateBlobUrl(null);
       setStatus({ type: "error", text: "No se pudo cargar la plantilla. Verifica que sea una imagen válida." });
     };
     
     img.src = url;
-  }, [templateBlobUrl]);
+  }, []);
 
   const handleClear = useCallback(() => {
     setCsvItems(null);
@@ -550,9 +543,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     setStatus(null);
     
     // Limpiar template y blob URL
-    if (templateBlobUrl) {
-      URL.revokeObjectURL(templateBlobUrl);
-    }
+    blobManager.revokeUrl('template');
     setTemplateImage(null);
     setTemplateBlobUrl(null);
     setFrame(null);
@@ -564,7 +555,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     if (qrInputRef.current) {
       qrInputRef.current.value = "";
     }
-  }, [templateBlobUrl]);
+  }, []);
 
   const handleProcess = useCallback(async () => {
     if (workItems.length === 0) {

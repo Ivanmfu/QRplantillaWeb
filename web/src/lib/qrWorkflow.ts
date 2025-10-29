@@ -125,12 +125,22 @@ async function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
     const image = new Image();
+    
+    // No revocar inmediatamente - dejar que el garbage collector se encargue
+    // o implementar una limpieza más tardía
+    const cleanup = () => {
+      // Cleanup después de un delay para permitir que la imagen se use
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 100);
+    };
+    
     image.onload = () => {
-      URL.revokeObjectURL(url);
+      cleanup();
       resolve(image);
     };
     image.onerror = (event) => {
-      URL.revokeObjectURL(url);
+      cleanup();
       reject(new Error("No se pudo cargar la imagen del QR subido"));
     };
     image.src = url;
