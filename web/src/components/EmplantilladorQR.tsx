@@ -653,7 +653,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);
-              URL.revokeObjectURL(url);
+              
+              // Cleanup con delay
+              setTimeout(() => {
+                try {
+                  URL.revokeObjectURL(url);
+                } catch (error) {
+                  console.debug("Error revocando URL de CSV:", error);
+                }
+              }, 1000);
             }}
           >
             Descargar plantilla
@@ -722,7 +730,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);
-              URL.revokeObjectURL(url);
+              
+              // Cleanup con delay
+              setTimeout(() => {
+                try {
+                  URL.revokeObjectURL(url);
+                } catch (error) {
+                  console.debug("Error revocando URL de ZIP:", error);
+                }
+              }, 1000);
               setStatus({ type: "info", text: `ZIP generado con ${entries.length} archivos.` });
             } catch (err) {
               const message = err instanceof Error ? err.message : String(err);

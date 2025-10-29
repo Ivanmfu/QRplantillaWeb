@@ -123,27 +123,33 @@ function drawSourceToCanvas(source: CanvasImageSource, size: { width: number; he
 
 async function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const image = new Image();
+    // Convertir blob a data URL para evitar problemas de revocación
+    const reader = new FileReader();
     
-    // No revocar inmediatamente - dejar que el garbage collector se encargue
-    // o implementar una limpieza más tardía
-    const cleanup = () => {
-      // Cleanup después de un delay para permitir que la imagen se use
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-      }, 100);
+    reader.onload = (e) => {
+      const result = e.target?.result;
+      if (typeof result === 'string') {
+        const image = new Image();
+        
+        image.onload = () => {
+          resolve(image);
+        };
+        
+        image.onerror = () => {
+          reject(new Error("No se pudo cargar la imagen del QR subido"));
+        };
+        
+        image.src = result;
+      } else {
+        reject(new Error("Error al convertir blob a data URL"));
+      }
     };
     
-    image.onload = () => {
-      cleanup();
-      resolve(image);
+    reader.onerror = () => {
+      reject(new Error("Error al leer el archivo QR"));
     };
-    image.onerror = (event) => {
-      cleanup();
-      reject(new Error("No se pudo cargar la imagen del QR subido"));
-    };
-    image.src = url;
+    
+    reader.readAsDataURL(blob);
   });
 }
 
@@ -505,5 +511,14 @@ function triggerDownload(blob: Blob, nombre: string, formato: "png" | "pdf"): vo
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  
+  // Dar más tiempo para que la descarga se complete antes de revocar
+  setTimeout(() => {
+    try {
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      // Ignorar errores de revocación
+      console.debug("Error revocando URL de descarga:", error);
+    }
+  }, 1000);
 }
