@@ -171,20 +171,29 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     return `${templateDimensions.width} × ${templateDimensions.height}px`;
   }, [templateDimensions]);
   const editorImageSrc = useMemo(() => {
-    if (templateImage) {
+    if (templateImage && templateImage.src) {
+      console.log("Using templateImage src:", templateImage.src);
       return templateImage.src;
     }
+    
     const base = template.baseImage;
-    if (base instanceof HTMLImageElement) {
+    if (base instanceof HTMLImageElement && base.src) {
+      console.log("Using template HTMLImageElement src:", base.src);
       return base.src;
     }
+    
     if (base instanceof HTMLCanvasElement) {
       try {
-        return base.toDataURL("image/png");
+        const dataUrl = base.toDataURL("image/png");
+        console.log("Using template canvas dataURL, length:", dataUrl.length);
+        return dataUrl;
       } catch (error) {
+        console.error("Error converting canvas to dataURL:", error);
         return undefined;
       }
     }
+    
+    console.log("No valid image source found");
     return undefined;
   }, [templateImage, template]);
 
@@ -448,21 +457,56 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       setTemplateImage(null);
       return;
     }
+    
+    // Validar tipo de archivo
+    if (!file.type.match(/^image\/(png|jpeg|jpg|svg\+xml)$/)) {
+      setStatus({ type: "error", text: "Por favor, sube una imagen válida (PNG, JPG, SVG)" });
+      return;
+    }
+    
+    setStatus({ type: "info", text: "Cargando plantilla..." });
+    
     const url = URL.createObjectURL(file);
     const img = new Image();
+    
     img.onload = () => {
       URL.revokeObjectURL(url);
+      
+      // Verificar que la imagen tiene dimensiones válidas
+      if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+        setStatus({ type: "error", text: "La imagen no tiene dimensiones válidas" });
+        setTemplateImage(null);
+        return;
+      }
+      
       setTemplateImage(img);
+      setStatus({ type: "info", text: `Plantilla cargada: ${img.naturalWidth}×${img.naturalHeight}px` });
+      
       // set default frame centered
-      const defaultFrame = { x: Math.round(img.width * 0.25), y: Math.round(img.height * 0.25), w: Math.round(img.width * 0.5), h: Math.round(img.height * 0.5) };
+      const defaultFrame = { 
+        x: Math.round(img.naturalWidth * 0.25), 
+        y: Math.round(img.naturalHeight * 0.25), 
+        w: Math.round(img.naturalWidth * 0.5), 
+        h: Math.round(img.naturalHeight * 0.5) 
+      };
+      
       setFrame(defaultFrame);
-      setLabelBox({ x: defaultFrame.x, y: defaultFrame.y + defaultFrame.h + 8, w: Math.round(defaultFrame.w), h: 40, text: 'nombre-salida' });
+      setLabelBox({ 
+        x: defaultFrame.x, 
+        y: defaultFrame.y + defaultFrame.h + 8, 
+        w: Math.round(defaultFrame.w), 
+        h: 40, 
+        text: 'nombre-salida' 
+      });
     };
-    img.onerror = () => {
+    
+    img.onerror = (error) => {
+      console.error("Error loading template image:", error);
       URL.revokeObjectURL(url);
       setTemplateImage(null);
-      setStatus({ type: "error", text: "No se pudo cargar la plantilla" });
+      setStatus({ type: "error", text: "No se pudo cargar la plantilla. Verifica que sea una imagen válida." });
     };
+    
     img.src = url;
   }, []);
 
@@ -747,6 +791,13 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               src={editorImageSrc}
               alt="Plantilla"
               style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+              onLoad={() => {
+                // Forzar re-render cuando la imagen se carga
+                setStatus({ type: "info", text: "Plantilla cargada correctamente" });
+              }}
+              onError={() => {
+                setStatus({ type: "error", text: "Error al cargar la imagen de la plantilla" });
+              }}
             />
 
             {frame && imageRef.current && (() => {
