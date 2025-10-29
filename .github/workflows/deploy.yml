@@ -29,15 +29,20 @@ jobs:
         cd web
         npm run build
         
-    - name: Add .nojekyll and cache busting
+    - name: Copy public assets to dist
       run: |
-        touch ./dist/.nojekyll
-        echo "Cache-Control: no-cache, no-store, must-revalidate" > ./dist/_headers
-        echo "Pragma: no-cache" >> ./dist/_headers
-        echo "Expires: 0" >> ./dist/_headers
-        echo "/* /index.html 200" > ./dist/_redirects
-        echo "Build timestamp: $(date)" > ./dist/version.txt
-        echo "Version: 5.0.0" >> ./dist/version.txt
+        cp web/public/cleanup.js dist/
+        cp web/public/.nojekyll dist/
+        
+    - name: Add cache busting metadata
+      run: |
+        echo "Cache-Control: no-cache, no-store, must-revalidate" > dist/_headers
+        echo "Pragma: no-cache" >> dist/_headers
+        echo "Expires: 0" >> dist/_headers
+        echo "/* /index.html 200" > dist/_redirects
+        echo "Build timestamp: $(date)" > dist/version.txt
+        echo "Version: 5.0.0" >> dist/version.txt
+        ls -la dist/ | head -20
         
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
@@ -46,3 +51,4 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./dist
         force_orphan: true
+        cname: false
