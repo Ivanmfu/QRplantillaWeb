@@ -173,20 +173,20 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     return `${templateDimensions.width} × ${templateDimensions.height}px`;
   }, [templateDimensions]);
   const editorImageSrc = useMemo(() => {
-    // Usar el blob URL guardado si existe
+    // Usar el data URL guardado si existe (templateBlobUrl ahora contiene data URL)
     if (templateBlobUrl) {
-      console.log("Using saved templateBlobUrl:", templateBlobUrl);
+      console.log("Using saved data URL, length:", templateBlobUrl.length);
       return templateBlobUrl;
     }
     
     if (templateImage && templateImage.src) {
-      console.log("Using templateImage src:", templateImage.src);
+      console.log("Using templateImage src:", templateImage.src.substring(0, 50) + "...");
       return templateImage.src;
     }
     
     const base = template.baseImage;
     if (base instanceof HTMLImageElement && base.src) {
-      console.log("Using template HTMLImageElement src:", base.src);
+      console.log("Using template HTMLImageElement src:", base.src.substring(0, 50) + "...");
       return base.src;
     }
     
@@ -222,12 +222,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     }
   }, [labelBox, template]);
 
-  // Cleanup blob URL when component unmounts
-  useEffect(() => {
-    return () => {
-      blobManager.revokeUrl('template');
-    };
-  }, []);
+  // No cleanup needed for data URLs
 
   const updateFrameField = useCallback(
     (field: keyof Frame, rawValue: number) => {
@@ -469,8 +464,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const handleTemplateChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
-      // Limpiar URL anterior si existe
-      blobManager.revokeUrl('template');
       setTemplateImage(null);
       setTemplateBlobUrl(null);
       return;
@@ -484,52 +477,69 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     
     setStatus({ type: "info", text: "Cargando plantilla..." });
     
-    // Crear URL con el blob manager
-    const url = blobManager.createUrl(file, 'template');
-    const img = new Image();
-    
-    img.onload = () => {
-      // Verificar que la imagen tiene dimensiones válidas
-      if (img.naturalWidth === 0 || img.naturalHeight === 0) {
-        setStatus({ type: "error", text: "La imagen no tiene dimensiones válidas" });
-        blobManager.revokeUrl('template');
-        setTemplateImage(null);
-        setTemplateBlobUrl(null);
-        return;
-      }
+    try {
+      // Convertir archivo a data URL en lugar de blob URL
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result;
+          if (typeof result === 'string') {
+            resolve(result);
+          } else {
+            reject(new Error('Error al leer el archivo'));
+          }
+        };
+        reader.onerror = () => reject(new Error('Error al leer el archivo'));
+        reader.readAsDataURL(file);
+      });
       
-      // Guardar tanto la imagen como el blob URL
-      setTemplateImage(img);
-      setTemplateBlobUrl(url);
-      setStatus({ type: "info", text: `Plantilla cargada: ${img.naturalWidth}×${img.naturalHeight}px` });
+      const img = new Image();
       
-      // set default frame centered
-      const defaultFrame = { 
-        x: Math.round(img.naturalWidth * 0.25), 
-        y: Math.round(img.naturalHeight * 0.25), 
-        w: Math.round(img.naturalWidth * 0.5), 
-        h: Math.round(img.naturalHeight * 0.5) 
+      img.onload = () => {
+        // Verificar que la imagen tiene dimensiones válidas
+        if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+          setStatus({ type: "error", text: "La imagen no tiene dimensiones válidas" });
+          setTemplateImage(null);
+          setTemplateBlobUrl(null);
+          return;
+        }
+        
+        // Guardar tanto la imagen como el data URL
+        setTemplateImage(img);
+        setTemplateBlobUrl(dataUrl);
+        setStatus({ type: "info", text: `Plantilla cargada: ${img.naturalWidth}×${img.naturalHeight}px` });
+        
+        // set default frame centered
+        const defaultFrame = { 
+          x: Math.round(img.naturalWidth * 0.25), 
+          y: Math.round(img.naturalHeight * 0.25), 
+          w: Math.round(img.naturalWidth * 0.5), 
+          h: Math.round(img.naturalHeight * 0.5) 
+        };
+        
+        setFrame(defaultFrame);
+        setLabelBox({ 
+          x: defaultFrame.x, 
+          y: defaultFrame.y + defaultFrame.h + 8, 
+          w: Math.round(defaultFrame.w), 
+          h: 40, 
+          text: 'nombre-salida' 
+        });
       };
       
-      setFrame(defaultFrame);
-      setLabelBox({ 
-        x: defaultFrame.x, 
-        y: defaultFrame.y + defaultFrame.h + 8, 
-        w: Math.round(defaultFrame.w), 
-        h: 40, 
-        text: 'nombre-salida' 
-      });
-    };
-    
-    img.onerror = (error) => {
-      console.error("Error loading template image:", error);
-      blobManager.revokeUrl('template');
-      setTemplateImage(null);
-      setTemplateBlobUrl(null);
-      setStatus({ type: "error", text: "No se pudo cargar la plantilla. Verifica que sea una imagen válida." });
-    };
-    
-    img.src = url;
+      img.onerror = (error) => {
+        console.error("Error loading template image:", error);
+        setTemplateImage(null);
+        setTemplateBlobUrl(null);
+        setStatus({ type: "error", text: "No se pudo cargar la plantilla. Verifica que sea una imagen válida." });
+      };
+      
+      img.src = dataUrl;
+      
+    } catch (error) {
+      console.error("Error processing template file:", error);
+      setStatus({ type: "error", text: "Error al procesar el archivo de plantilla" });
+    }
   }, []);
 
   const handleClear = useCallback(() => {
@@ -542,8 +552,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     setPreviewUrl(null);
     setStatus(null);
     
-    // Limpiar template y blob URL
-    blobManager.revokeUrl('template');
+    // Limpiar template (no cleanup needed for data URLs)
     setTemplateImage(null);
     setTemplateBlobUrl(null);
     setFrame(null);
