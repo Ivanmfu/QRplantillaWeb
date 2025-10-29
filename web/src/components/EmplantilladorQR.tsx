@@ -185,6 +185,27 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     
     const base = template.baseImage;
     if (base instanceof HTMLImageElement && base.src) {
+      // Si la imagen base es un blob:, la rasterizamos a PNG data URL para evitar revocaciones
+      if (base.src.startsWith('blob:')) {
+        try {
+          const width = base.naturalWidth || base.width;
+          const height = base.naturalHeight || base.height;
+          if (width && height) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(base, 0, 0, width, height);
+              const dataUrl = canvas.toDataURL('image/png');
+              console.log("Rasterized blob image to data URL, length:", dataUrl.length);
+              return dataUrl;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to rasterize blob image, falling back to src', e);
+        }
+      }
       console.log("Using template HTMLImageElement src:", base.src.substring(0, 50) + "...");
       return base.src;
     }
@@ -514,9 +535,28 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           return;
         }
         
-        // Guardar tanto la imagen como el data URL
+        // Rasterizar a PNG data URL estable para evitar referencias internas a blob:
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            const pngUrl = canvas.toDataURL('image/png');
+            console.log('📦 Template rasterized to PNG data URL, length:', pngUrl.length);
+            setTemplateBlobUrl(pngUrl);
+          } else {
+            // Fallback al dataUrl original si no hay contexto
+            setTemplateBlobUrl(dataUrl);
+          }
+        } catch (e) {
+          console.warn('Could not rasterize template, using original data URL', e);
+          setTemplateBlobUrl(dataUrl);
+        }
+
+        // Guardar la imagen original para dimensiones/navegación
         setTemplateImage(img);
-        setTemplateBlobUrl(dataUrl);
         setStatus({ type: "info", text: `Plantilla cargada: ${img.naturalWidth}×${img.naturalHeight}px` });
         
         // set default frame centered
