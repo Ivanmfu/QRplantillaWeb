@@ -11,15 +11,20 @@ export default defineConfig({
     assetsDir: 'assets',
     rollupOptions: {
       output: {
-        // Force new filenames to break cache
-        entryFileNames: 'assets/[name]-[hash]-v2.js',
-        chunkFileNames: 'assets/[name]-[hash]-v2.js',
-        assetFileNames: 'assets/[name]-[hash]-v2.[ext]'
+        // Force new filenames to break cache completely
+        entryFileNames: 'assets/[name]-[hash]-v3.js',
+        chunkFileNames: 'assets/[name]-[hash]-v3.js',
+        assetFileNames: 'assets/[name]-[hash]-v3.[ext]'
       }
     }
   },
   server: {
     port: 5173,
-    host: true
+    host: true,
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
   }
 })

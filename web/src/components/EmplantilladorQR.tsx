@@ -13,7 +13,6 @@ import {
   getQRForItem,
   prepareTemplateForItem,
 } from "../lib/qrWorkflow";
-import { blobManager } from "../lib/blobManager";
 
 type EmplantilladorQRProps = {
   template: TemplateDef;
@@ -658,23 +657,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             className="secondary"
             onClick={() => {
               const csv = createTemplateCsv(csvHeaders.length ? csvHeaders : undefined);
-              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-              const url = URL.createObjectURL(blob);
+              
+              // Usar data URL en lugar de blob URL
+              const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
               const a = document.createElement("a");
-              a.href = url;
+              a.href = dataUrl;
               a.download = "plantilla.csv";
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);
-              
-              // Cleanup con delay
-              setTimeout(() => {
-                try {
-                  URL.revokeObjectURL(url);
-                } catch (error) {
-                  console.debug("Error revocando URL de CSV:", error);
-                }
-              }, 1000);
             }}
           >
             Descargar plantilla
@@ -736,22 +727,19 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 return;
               }
               const zipBlob = await createZipFromBlobs(entries);
-              const url = URL.createObjectURL(zipBlob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = "plantilla_qrs.zip";
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
               
-              // Cleanup con delay
-              setTimeout(() => {
-                try {
-                  URL.revokeObjectURL(url);
-                } catch (error) {
-                  console.debug("Error revocando URL de ZIP:", error);
-                }
-              }, 1000);
+              // Convertir blob a data URL para evitar problemas de revocación
+              const reader = new FileReader();
+              reader.onload = function() {
+                const dataUrl = reader.result as string;
+                const a = document.createElement("a");
+                a.href = dataUrl;
+                a.download = "plantilla_qrs.zip";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+              };
+              reader.readAsDataURL(zipBlob);
               setStatus({ type: "info", text: `ZIP generado con ${entries.length} archivos.` });
             } catch (err) {
               const message = err instanceof Error ? err.message : String(err);

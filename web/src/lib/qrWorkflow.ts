@@ -503,22 +503,18 @@ export async function createZipFromBlobs(entries: Array<{ nombre: string; blob: 
 
 function triggerDownload(blob: Blob, nombre: string, formato: "png" | "pdf"): void {
   const extension = formato === "png" ? ".png" : ".pdf";
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${nombre}${extension}`;
-  anchor.style.display = "none";
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
   
-  // Dar más tiempo para que la descarga se complete antes de revocar
-  setTimeout(() => {
-    try {
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      // Ignorar errores de revocación
-      console.debug("Error revocando URL de descarga:", error);
-    }
-  }, 1000);
+  // Usar FileReader para convertir a data URL
+  const reader = new FileReader();
+  reader.onload = function() {
+    const dataUrl = reader.result as string;
+    const anchor = document.createElement("a");
+    anchor.href = dataUrl;
+    anchor.download = `${nombre}${extension}`;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+  };
+  reader.readAsDataURL(blob);
 }
