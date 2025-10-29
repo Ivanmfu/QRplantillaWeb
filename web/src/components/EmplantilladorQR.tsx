@@ -492,7 +492,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   }, []);
 
   const handleTemplateChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("🖼️ HandleTemplateChange iniciado - v2.0");
+    console.log("🖼️ HandleTemplateChange iniciado - v3.0 DIRECT");
     const file = event.target.files?.[0];
     if (!file) {
       console.log("❌ No file selected");
@@ -513,59 +513,39 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     setStatus({ type: "info", text: "Cargando plantilla..." });
     
     try {
-      console.log("🔄 Converting to data URL...");
-      // Convertir archivo a data URL en lugar de blob URL
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const result = e.target?.result;
-          if (typeof result === 'string') {
-            console.log("✅ Data URL created, length:", result.length);
-            resolve(result);
-          } else {
-            reject(new Error('Error al leer el archivo'));
-          }
-        };
-        reader.onerror = () => reject(new Error('Error al leer el archivo'));
-        reader.readAsDataURL(file);
-      });
+      console.log("🔄 DIRECT: Loading to canvas without intermediate Image...");
       
-      console.log("🖼️ Creating image element...");
+      // Crear bitmap directamente desde el archivo
+      const bitmap = await createImageBitmap(file);
+      console.log("✅ ImageBitmap created:", bitmap.width, "x", bitmap.height);
+      
+      // Rasterizar inmediatamente a PNG data URL
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        throw new Error('No se pudo crear contexto 2D');
+      }
+      
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close(); // Liberar el bitmap
+      
+      const pngDataUrl = canvas.toDataURL('image/png');
+      console.log('📦 PNG data URL created directly, length:', pngDataUrl.length, 'starts with:', pngDataUrl.substring(0, 30));
+      
+      // Verificar que es data URL
+      if (!pngDataUrl.startsWith('data:')) {
+        console.error('❌ Generated URL is not a data URL!', pngDataUrl.substring(0, 50));
+        setStatus({ type: "error", text: "Error interno: URL no válida generada" });
+        return;
+      }
+      
+      // Crear imagen desde el data URL para obtener dimensiones
       const img = new Image();
-      
       img.onload = () => {
-        console.log("✅ Image loaded successfully:", img.naturalWidth, "x", img.naturalHeight);
-        
-        // Verificar que la imagen tiene dimensiones válidas
-        if (img.naturalWidth === 0 || img.naturalHeight === 0) {
-          console.log("❌ Invalid dimensions");
-          setStatus({ type: "error", text: "La imagen no tiene dimensiones válidas" });
-          setTemplateImage(null);
-          setTemplateBlobUrl(null);
-          return;
-        }
-        
-        // Rasterizar a PNG data URL estable para evitar referencias internas a blob:
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            const pngUrl = canvas.toDataURL('image/png');
-            console.log('📦 Template rasterized to PNG data URL, length:', pngUrl.length);
-            setTemplateBlobUrl(pngUrl);
-          } else {
-            // Fallback al dataUrl original si no hay contexto
-            setTemplateBlobUrl(dataUrl);
-          }
-        } catch (e) {
-          console.warn('Could not rasterize template, using original data URL', e);
-          setTemplateBlobUrl(dataUrl);
-        }
-
-        // Guardar la imagen original para dimensiones/navegación
+        console.log("✅ Final image loaded:", img.naturalWidth, "x", img.naturalHeight);
         setTemplateImage(img);
         setStatus({ type: "info", text: `Plantilla cargada: ${img.naturalWidth}×${img.naturalHeight}px` });
         
@@ -589,18 +569,20 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       };
       
       img.onerror = (error) => {
-        console.error("❌ Error loading template image:", error);
-        setTemplateImage(null);
-        setTemplateBlobUrl(null);
-        setStatus({ type: "error", text: "No se pudo cargar la plantilla. Verifica que sea una imagen válida." });
+        console.error("❌ Error loading final image:", error);
+        setStatus({ type: "error", text: "Error al cargar la plantilla procesada" });
       };
       
-      console.log("🔗 Setting image src to data URL");
-      img.src = dataUrl;
+      // Guardar el data URL ANTES de cargar la imagen
+      setTemplateBlobUrl(pngDataUrl);
+      console.log("✅ templateBlobUrl set to data URL");
+      
+      // Ahora cargar la imagen
+      img.src = pngDataUrl;
       
     } catch (error) {
       console.error("❌ Error processing template file:", error);
-      setStatus({ type: "error", text: "Error al procesar el archivo de plantilla" });
+      setStatus({ type: "error", text: "Error al procesar el archivo de plantilla: " + (error instanceof Error ? error.message : String(error)) });
     }
   }, []);
 
