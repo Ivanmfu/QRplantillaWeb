@@ -108,6 +108,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const [qrIndex, setQrIndex] = useState<Map<string, UploadedQR>>(new Map());
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [templateImage, setTemplateImage] = useState<HTMLImageElement | null>(null);
+  const [templateBlobUrl, setTemplateBlobUrl] = useState<string | null>(null);
   const [frame, setFrame] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [labelBox, setLabelBox] = useState<LabelBoxShape | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -171,6 +172,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     return `${templateDimensions.width} × ${templateDimensions.height}px`;
   }, [templateDimensions]);
   const editorImageSrc = useMemo(() => {
+    // Usar el blob URL guardado si existe
+    if (templateBlobUrl) {
+      console.log("Using saved templateBlobUrl:", templateBlobUrl);
+      return templateBlobUrl;
+    }
+    
     if (templateImage && templateImage.src) {
       console.log("Using templateImage src:", templateImage.src);
       return templateImage.src;
@@ -195,7 +202,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     
     console.log("No valid image source found");
     return undefined;
-  }, [templateImage, template]);
+  }, [templateBlobUrl, templateImage, template]);
 
   useEffect(() => {
     if (!frame && template.frame) {
@@ -213,6 +220,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       setLabelBox({ ...labelBox, text: template.labelText });
     }
   }, [labelBox, template]);
+
+  // Cleanup blob URL when component unmounts or template changes
+  useEffect(() => {
+    return () => {
+      if (templateBlobUrl) {
+        URL.revokeObjectURL(templateBlobUrl);
+      }
+    };
+  }, [templateBlobUrl]);
 
   const updateFrameField = useCallback(
     (field: keyof Frame, rawValue: number) => {
@@ -454,7 +470,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const handleTemplateChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
+      // Limpiar URL anterior si existe
+      if (templateBlobUrl) {
+        URL.revokeObjectURL(templateBlobUrl);
+      }
       setTemplateImage(null);
+      setTemplateBlobUrl(null);
       return;
     }
     
@@ -466,20 +487,27 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     
     setStatus({ type: "info", text: "Cargando plantilla..." });
     
+    // Limpiar URL anterior si existe
+    if (templateBlobUrl) {
+      URL.revokeObjectURL(templateBlobUrl);
+    }
+    
     const url = URL.createObjectURL(file);
     const img = new Image();
     
     img.onload = () => {
-      URL.revokeObjectURL(url);
-      
       // Verificar que la imagen tiene dimensiones válidas
       if (img.naturalWidth === 0 || img.naturalHeight === 0) {
         setStatus({ type: "error", text: "La imagen no tiene dimensiones válidas" });
+        URL.revokeObjectURL(url);
         setTemplateImage(null);
+        setTemplateBlobUrl(null);
         return;
       }
       
+      // Guardar tanto la imagen como el blob URL
       setTemplateImage(img);
+      setTemplateBlobUrl(url);
       setStatus({ type: "info", text: `Plantilla cargada: ${img.naturalWidth}×${img.naturalHeight}px` });
       
       // set default frame centered
@@ -504,11 +532,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       console.error("Error loading template image:", error);
       URL.revokeObjectURL(url);
       setTemplateImage(null);
+      setTemplateBlobUrl(null);
       setStatus({ type: "error", text: "No se pudo cargar la plantilla. Verifica que sea una imagen válida." });
     };
     
     img.src = url;
-  }, []);
+  }, [templateBlobUrl]);
 
   const handleClear = useCallback(() => {
     setCsvItems(null);
@@ -519,13 +548,23 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     setQrFolderName(null);
     setPreviewUrl(null);
     setStatus(null);
+    
+    // Limpiar template y blob URL
+    if (templateBlobUrl) {
+      URL.revokeObjectURL(templateBlobUrl);
+    }
+    setTemplateImage(null);
+    setTemplateBlobUrl(null);
+    setFrame(null);
+    setLabelBox(null);
+    
     if (csvInputRef.current) {
       csvInputRef.current.value = "";
     }
     if (qrInputRef.current) {
       qrInputRef.current.value = "";
     }
-  }, []);
+  }, [templateBlobUrl]);
 
   const handleProcess = useCallback(async () => {
     if (workItems.length === 0) {
