@@ -894,17 +894,21 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           >
             <img
               ref={imageRef}
-              src={editorImageSrc}
+              src={editorImageSrc && editorImageSrc.startsWith('data:') ? editorImageSrc : ''}
               alt="Plantilla"
               style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
               onLoad={() => {
-                // Forzar re-render cuando la imagen se carga
                 setStatus({ type: "info", text: "Plantilla cargada correctamente" });
               }}
               onError={() => {
                 setStatus({ type: "error", text: "Error al cargar la imagen de la plantilla" });
               }}
             />
+            {editorImageSrc && !editorImageSrc.startsWith('data:') && (
+              <div style={{ position: 'absolute', inset: 8, pointerEvents: 'none', color: '#f99', fontSize: 12 }}>
+                Aviso: se intentó usar una URL no segura para la plantilla. Ignorada para evitar errores blob:.
+              </div>
+            )}
 
             {frame && imageRef.current && (() => {
               const img = imageRef.current!;
