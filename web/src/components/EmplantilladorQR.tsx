@@ -462,15 +462,20 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   }, []);
 
   const handleTemplateChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("🖼️ HandleTemplateChange iniciado - v2.0");
     const file = event.target.files?.[0];
     if (!file) {
+      console.log("❌ No file selected");
       setTemplateImage(null);
       setTemplateBlobUrl(null);
       return;
     }
     
+    console.log("📁 File selected:", file.name, file.type, file.size);
+    
     // Validar tipo de archivo
     if (!file.type.match(/^image\/(png|jpeg|jpg|svg\+xml)$/)) {
+      console.log("❌ Invalid file type:", file.type);
       setStatus({ type: "error", text: "Por favor, sube una imagen válida (PNG, JPG, SVG)" });
       return;
     }
@@ -478,12 +483,14 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     setStatus({ type: "info", text: "Cargando plantilla..." });
     
     try {
+      console.log("🔄 Converting to data URL...");
       // Convertir archivo a data URL en lugar de blob URL
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const result = e.target?.result;
           if (typeof result === 'string') {
+            console.log("✅ Data URL created, length:", result.length);
             resolve(result);
           } else {
             reject(new Error('Error al leer el archivo'));
@@ -493,11 +500,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         reader.readAsDataURL(file);
       });
       
+      console.log("🖼️ Creating image element...");
       const img = new Image();
       
       img.onload = () => {
+        console.log("✅ Image loaded successfully:", img.naturalWidth, "x", img.naturalHeight);
+        
         // Verificar que la imagen tiene dimensiones válidas
         if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+          console.log("❌ Invalid dimensions");
           setStatus({ type: "error", text: "La imagen no tiene dimensiones válidas" });
           setTemplateImage(null);
           setTemplateBlobUrl(null);
@@ -517,6 +528,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           h: Math.round(img.naturalHeight * 0.5) 
         };
         
+        console.log("🎯 Default frame set:", defaultFrame);
         setFrame(defaultFrame);
         setLabelBox({ 
           x: defaultFrame.x, 
@@ -528,16 +540,17 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       };
       
       img.onerror = (error) => {
-        console.error("Error loading template image:", error);
+        console.error("❌ Error loading template image:", error);
         setTemplateImage(null);
         setTemplateBlobUrl(null);
         setStatus({ type: "error", text: "No se pudo cargar la plantilla. Verifica que sea una imagen válida." });
       };
       
+      console.log("🔗 Setting image src to data URL");
       img.src = dataUrl;
       
     } catch (error) {
-      console.error("Error processing template file:", error);
+      console.error("❌ Error processing template file:", error);
       setStatus({ type: "error", text: "Error al procesar el archivo de plantilla" });
     }
   }, []);
