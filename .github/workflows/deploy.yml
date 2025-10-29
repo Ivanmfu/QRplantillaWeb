@@ -29,8 +29,15 @@ jobs:
         cd web
         npm run build
         
-    - name: Add .nojekyll file
-      run: touch ./dist/.nojekyll
+    - name: Add .nojekyll and cache busting
+      run: |
+        touch ./dist/.nojekyll
+        echo "Cache-Control: no-cache, no-store, must-revalidate" > ./dist/_headers
+        echo "Pragma: no-cache" >> ./dist/_headers
+        echo "Expires: 0" >> ./dist/_headers
+        echo "/* /index.html 200" > ./dist/_redirects
+        echo "Build timestamp: $(date)" > ./dist/version.txt
+        echo "Version: 5.0.0" >> ./dist/version.txt
         
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
