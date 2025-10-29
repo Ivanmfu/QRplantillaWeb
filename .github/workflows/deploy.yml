@@ -31,6 +31,9 @@ jobs:
         cd web
         npm run build
         
+    - name: Add .nojekyll file
+      run: touch ./dist/.nojekyll
+        
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
       if: github.ref == 'refs/heads/main'
