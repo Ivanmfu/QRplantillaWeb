@@ -40,7 +40,7 @@ URL.revokeObjectURL = function(url: string): void {
 };
 
 // Version checker - force reload if cached version is detected
-const CURRENT_VERSION = "4.0.0";
+const CURRENT_VERSION = "5.0.0";
 const STORED_VERSION = localStorage.getItem("app_version");
 
 console.log("🚀 App starting - Version:", CURRENT_VERSION);

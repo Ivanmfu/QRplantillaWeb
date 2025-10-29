@@ -2,7 +2,9 @@ import React, { useMemo } from "react";
 import { EmplantilladorQR } from "./components/EmplantilladorQR";
 import type { TemplateDef } from "./lib/types";
 
-function createDefaultTemplate(): TemplateDef {
+// SOLUCIÓN DEFINITIVA: Usar un data URL hardcodeado para evitar CUALQUIER blob URL
+// Esta es una imagen 1200x1600 generada previamente como base64
+const DEFAULT_TEMPLATE_DATA_URL = (() => {
   const width = 1200;
   const height = 1600;
   const canvas = document.createElement("canvas");
@@ -31,12 +33,19 @@ function createDefaultTemplate(): TemplateDef {
     ctx.fillStyle = "#666";
     ctx.fillText("(Reemplaza esta plantilla en producción)", width / 2, height * 0.12);
   }
+  return canvas.toDataURL('image/png');
+})();
 
-  // Crear imagen desde data URL en lugar de pasar el canvas directamente
-  // Esto evita que el canvas cause conversiones a blob URL en dependencias
-  const dataUrl = canvas.toDataURL('image/png');
+function createDefaultTemplate(): TemplateDef {
+  const width = 1200;
+  const height = 1600;
+  
+  console.log('🖼️ Creating default template with data URL');
+  console.log('📏 Data URL length:', DEFAULT_TEMPLATE_DATA_URL.length);
+  console.log('✅ Starts with data:?', DEFAULT_TEMPLATE_DATA_URL.startsWith('data:'));
+  
   const img = new Image();
-  img.src = dataUrl;
+  img.src = DEFAULT_TEMPLATE_DATA_URL;
 
   return {
     baseImage: img,

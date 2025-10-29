@@ -172,14 +172,29 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     return `${templateDimensions.width} × ${templateDimensions.height}px`;
   }, [templateDimensions]);
   const editorImageSrc = useMemo(() => {
+    console.log('🔍 editorImageSrc recalculating...');
+    console.log('  templateBlobUrl:', templateBlobUrl ? `${templateBlobUrl.substring(0, 30)}... (${templateBlobUrl.length} chars)` : 'null');
+    console.log('  templateImage:', templateImage ? `${templateImage.width}x${templateImage.height}, src=${templateImage.src?.substring(0, 50)}` : 'null');
+    console.log('  template.baseImage type:', template.baseImage.constructor.name);
+    
     // 1) Prioriza el data URL ya calculado
     if (templateBlobUrl) {
-      console.log("Editor image: using rasterized data URL, length:", templateBlobUrl.length);
+      if (!templateBlobUrl.startsWith('data:')) {
+        console.error('❌ CRITICAL: templateBlobUrl is NOT a data URL!', templateBlobUrl.substring(0, 100));
+        return undefined;
+      }
+      console.log("✅ Editor image: using rasterized data URL, length:", templateBlobUrl.length);
       return templateBlobUrl;
     }
 
     // 2) Si hay HTMLImageElement, lo rasterizamos a PNG data URL (no usamos .src)
     if (templateImage) {
+      // CRITICAL: Verificar que templateImage.src es data URL
+      if (templateImage.src && !templateImage.src.startsWith('data:')) {
+        console.error('❌ CRITICAL: templateImage.src is blob URL!', templateImage.src);
+        return undefined;
+      }
+      
       try {
         const w = templateImage.naturalWidth || templateImage.width;
         const h = templateImage.naturalHeight || templateImage.height;
@@ -190,18 +205,24 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           if (ctx) {
             ctx.drawImage(templateImage, 0, 0, w, h);
             const url = c.toDataURL('image/png');
-            console.log('Editor image: rasterized templateImage to data URL, length:', url.length);
+            console.log('✅ Editor image: rasterized templateImage to data URL, length:', url.length);
             return url;
           }
         }
       } catch (e) {
-        console.warn('Editor image: could not rasterize templateImage', e);
+        console.warn('⚠️ Editor image: could not rasterize templateImage', e);
       }
     }
 
     // 3) Fuente base del template
     const base = template.baseImage;
     if (base instanceof HTMLImageElement) {
+      // CRITICAL: Verificar que base.src es data URL
+      if (base.src && !base.src.startsWith('data:')) {
+        console.error('❌ CRITICAL: base HTMLImageElement.src is blob URL!', base.src);
+        return undefined;
+      }
+      
       try {
         const w = base.naturalWidth || base.width;
         const h = base.naturalHeight || base.height;
@@ -212,26 +233,26 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           if (ctx) {
             ctx.drawImage(base, 0, 0, w, h);
             const url = c.toDataURL('image/png');
-            console.log('Editor image: rasterized base HTMLImageElement to data URL, length:', url.length);
+            console.log('✅ Editor image: rasterized base HTMLImageElement to data URL, length:', url.length);
             return url;
           }
         }
       } catch (e) {
-        console.warn('Editor image: could not rasterize base HTMLImageElement', e);
+        console.warn('⚠️ Editor image: could not rasterize base HTMLImageElement', e);
       }
     }
 
     if (base instanceof HTMLCanvasElement) {
       try {
         const dataUrl = base.toDataURL('image/png');
-        console.log('Editor image: using base canvas data URL, length:', dataUrl.length);
+        console.log('✅ Editor image: using base canvas data URL, length:', dataUrl.length);
         return dataUrl;
       } catch (e) {
-        console.error('Editor image: failed to convert canvas to data URL', e);
+        console.error('❌ Editor image: failed to convert canvas to data URL', e);
       }
     }
 
-    console.log('Editor image: no valid image source');
+    console.log('⚠️ Editor image: no valid image source');
     return undefined;
   }, [templateBlobUrl, templateImage, template]);
 
