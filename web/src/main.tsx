@@ -3,8 +3,44 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./styles/global.css";
 
+// BLOB URL INTERCEPTOR - Detecta todas las creaciones de blob URLs
+const originalCreateObjectURL = URL.createObjectURL;
+const originalRevokeObjectURL = URL.revokeObjectURL;
+const blobRegistry = new Map<string, { stack: string; timestamp: number }>();
+
+URL.createObjectURL = function(blob: Blob | MediaSource): string {
+  const url = originalCreateObjectURL.call(URL, blob);
+  
+  // Capturar stack trace
+  const stack = new Error().stack || 'No stack available';
+  blobRegistry.set(url, { stack, timestamp: Date.now() });
+  
+  console.warn('🚨 BLOB URL CREATED:', url);
+  console.log('📍 Stack trace:', stack);
+  console.log('📦 Blob type:', blob instanceof Blob ? blob.type : 'MediaSource');
+  
+  // BLOQUEAR creación de blob URLs en PRODUCCIÓN
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    console.error('❌ BLOB URL BLOCKED in production!');
+    // Devolver una imagen 1x1 transparente data URL en su lugar
+    return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  }
+  
+  return url;
+};
+
+URL.revokeObjectURL = function(url: string): void {
+  console.log('🗑️ BLOB URL REVOKED:', url);
+  if (blobRegistry.has(url)) {
+    const info = blobRegistry.get(url);
+    console.log('⏱️ Lifetime:', Date.now() - (info?.timestamp || 0), 'ms');
+    blobRegistry.delete(url);
+  }
+  originalRevokeObjectURL.call(URL, url);
+};
+
 // Version checker - force reload if cached version is detected
-const CURRENT_VERSION = "3.0.0";
+const CURRENT_VERSION = "4.0.0";
 const STORED_VERSION = localStorage.getItem("app_version");
 
 console.log("🚀 App starting - Version:", CURRENT_VERSION);
@@ -46,3 +82,4 @@ createRoot(container).render(
     <App />
   </React.StrictMode>
 );
+

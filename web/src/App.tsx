@@ -32,8 +32,14 @@ function createDefaultTemplate(): TemplateDef {
     ctx.fillText("(Reemplaza esta plantilla en producción)", width / 2, height * 0.12);
   }
 
+  // Crear imagen desde data URL en lugar de pasar el canvas directamente
+  // Esto evita que el canvas cause conversiones a blob URL en dependencias
+  const dataUrl = canvas.toDataURL('image/png');
+  const img = new Image();
+  img.src = dataUrl;
+
   return {
-    baseImage: canvas,
+    baseImage: img,
     size: { width, height },
     frame: {
       x: width * 0.25,

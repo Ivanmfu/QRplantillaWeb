@@ -11,10 +11,10 @@ export default defineConfig({
     assetsDir: 'assets',
     rollupOptions: {
       output: {
-        // Force new filenames to break cache completely - v4
-        entryFileNames: 'assets/[name]-[hash]-v4.js',
-        chunkFileNames: 'assets/[name]-[hash]-v4.js',
-        assetFileNames: 'assets/[name]-[hash]-v4.[ext]'
+        // Force new filenames to break cache completely - v5
+        entryFileNames: 'assets/[name]-[hash]-v5.js',
+        chunkFileNames: 'assets/[name]-[hash]-v5.js',
+        assetFileNames: 'assets/[name]-[hash]-v5.[ext]'
       }
     }
   },
