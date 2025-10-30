@@ -722,6 +722,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
 
   // Función para exportar ZIP con modal de progreso
   const handleExportZip = useCallback(async () => {
+    console.log('=== EXPORT ZIP DEBUG ===');
+    console.log('workItems.length:', workItems.length);
+    console.log('workItems:', workItems);
+    console.log('qrIndex size:', qrIndex.size);
+    console.log('activeTemplate:', activeTemplate);
+    
     if (workItems.length === 0) {
       setStatus({ type: "error", text: "No hay elementos para exportar." });
       return;
@@ -746,7 +752,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         status: 'Procesando plantillas...'
       }));
 
+      console.log('Calling processItemsToBlobs with:', { workItems, qrIndex, activeTemplate });
       const entries = await processItemsToBlobs(workItems, qrIndex, activeTemplate);
+      console.log('processItemsToBlobs result:', entries);
       
       if (entries.length === 0) {
         setExportModal(prev => ({
@@ -1517,7 +1525,8 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
+          zIndex: 9999,
+          overflow: 'auto',
         }}>
           <div style={{
             backgroundColor: 'var(--color-background)',
@@ -1525,8 +1534,11 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             padding: '32px',
             maxWidth: '400px',
             width: '90%',
+            maxHeight: '80vh',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
+            margin: '20px',
+            position: 'relative',
           }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>
