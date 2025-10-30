@@ -114,7 +114,16 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const [selectedItemIndex, setSelectedItemIndex] = useState<number>(0);
   const [fontSize, setFontSize] = useState<number>(14);
   const [isBold, setIsBold] = useState<boolean>(false);
+  const [textColor, setTextColor] = useState<string>('#000000');
+  const [isTransparentBackground, setIsTransparentBackground] = useState<boolean>(false);
   const [showGuides, setShowGuides] = useState<{ horizontal: boolean; vertical: boolean }>({ horizontal: false, vertical: false });
+  const [exportModal, setExportModal] = useState<{
+    isOpen: boolean;
+    status: string;
+    progress: number;
+    error?: string;
+    canCancel: boolean;
+  }>({ isOpen: false, status: '', progress: 0, canCancel: false });
   const editorRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef<DragState | null>(null);
   const [results, setResults] = useState<ProcessResult[]>([]);
@@ -711,6 +720,95 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     }
   }, [activeTemplate, onResults, qrIndex, workItems]);
 
+  // Función para exportar ZIP con modal de progreso
+  const handleExportZip = useCallback(async () => {
+    if (workItems.length === 0) {
+      setStatus({ type: "error", text: "No hay elementos para exportar." });
+      return;
+    }
+
+    // Inicializar modal
+    setExportModal({
+      isOpen: true,
+      progress: 0,
+      status: 'Preparando exportación...',
+      canCancel: true,
+      error: undefined
+    });
+
+    try {
+      const total = workItems.length;
+      
+      // Procesar items con progreso
+      setExportModal(prev => ({
+        ...prev,
+        progress: 10,
+        status: 'Procesando plantillas...'
+      }));
+
+      const entries = await processItemsToBlobs(workItems, qrIndex, activeTemplate);
+      
+      if (entries.length === 0) {
+        setExportModal(prev => ({
+          ...prev,
+          error: 'No se generaron archivos para el ZIP',
+          canCancel: false
+        }));
+        return;
+      }
+
+      setExportModal(prev => ({
+        ...prev,
+        progress: 80,
+        status: 'Generando archivo ZIP...',
+        canCancel: false
+      }));
+
+      const zipBlob = await createZipFromBlobs(entries);
+      
+      setExportModal(prev => ({
+        ...prev,
+        progress: 95,
+        status: 'Iniciando descarga...'
+      }));
+      
+      // Convertir blob a data URL para evitar problemas de revocación
+      const reader = new FileReader();
+      reader.onload = function() {
+        const dataUrl = reader.result as string;
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = "plantilla_qrs.zip";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        setExportModal(prev => ({
+          ...prev,
+          progress: 100,
+          status: `ZIP generado con ${entries.length} archivos`
+        }));
+
+        // Cerrar modal después de un breve delay
+        setTimeout(() => {
+          setExportModal(prev => ({ ...prev, isOpen: false }));
+        }, 2000);
+      };
+      reader.readAsDataURL(zipBlob);
+      
+      setStatus({ type: "info", text: `ZIP generado con ${entries.length} archivos.` });
+      
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setExportModal(prev => ({
+        ...prev,
+        error: `Error al generar ZIP: ${message}`,
+        canCancel: false
+      }));
+      setStatus({ type: "error", text: `Error al generar ZIP: ${message}` });
+    }
+  }, [workItems, qrIndex, activeTemplate]);
+
   const resultsMap = useMemo(() => {
     const map = new Map<string, ProcessResult>();
     for (const result of results) {
@@ -826,37 +924,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         <button
           type="button"
           className="secondary"
-          onClick={async () => {
-            try {
-              if (workItems.length === 0) {
-                setStatus({ type: "error", text: "No hay elementos para exportar." });
-                return;
-              }
-              const entries = await processItemsToBlobs(workItems, qrIndex, activeTemplate);
-              if (entries.length === 0) {
-                setStatus({ type: "error", text: "No se generaron archivos para el ZIP" });
-                return;
-              }
-              const zipBlob = await createZipFromBlobs(entries);
-              
-              // Convertir blob a data URL para evitar problemas de revocación
-              const reader = new FileReader();
-              reader.onload = function() {
-                const dataUrl = reader.result as string;
-                const a = document.createElement("a");
-                a.href = dataUrl;
-                a.download = "plantilla_qrs.zip";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-              };
-              reader.readAsDataURL(zipBlob);
-              setStatus({ type: "info", text: `ZIP generado con ${entries.length} archivos.` });
-            } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              setStatus({ type: "error", text: `Error al generar ZIP: ${message}` });
-            }
-          }}
+          onClick={handleExportZip}
           disabled={processing}
         >
           Exportar ZIP
@@ -1111,8 +1179,8 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     top,
                     width,
                     height,
-                    border: '2px solid red', // Debug: más visible temporalmente
-                    backgroundColor: '#fff',
+                    border: '1px solid #333', // Restaurado a normal
+                    backgroundColor: isTransparentBackground ? 'transparent' : '#fff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1139,7 +1207,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                       textAlign: 'center',
                       fontSize: `${fontSize}px`,
                       fontWeight: isBold ? 'bold' : 'normal',
-                      fontFamily: 'Arial, sans-serif'
+                      fontFamily: 'Arial, sans-serif',
+                      color: textColor,
+                      backgroundColor: 'transparent'
                     }}
                     value={labelBox.text}
                     onChange={(e) => setLabelBox({ ...labelBox, text: e.target.value })}
@@ -1338,6 +1408,26 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 />
                 <span style={styles.editorFieldLabel}>Negrita</span>
               </label>
+              <label style={styles.editorField}>
+                <span style={styles.editorFieldLabel}>Color</span>
+                <input
+                  type="color"
+                  value={textColor}
+                  onChange={(e) => setTextColor(e.target.value)}
+                  disabled={!labelBox}
+                  style={{ width: '40px', height: '30px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                />
+              </label>
+              <label style={{...styles.editorField, flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
+                <input
+                  type="checkbox"
+                  checked={isTransparentBackground}
+                  onChange={(e) => setIsTransparentBackground(e.target.checked)}
+                  disabled={!labelBox}
+                  style={{ margin: 0 }}
+                />
+                <span style={styles.editorFieldLabel}>Fondo transparente</span>
+              </label>
             </div>
           </div>
         </div>
@@ -1414,6 +1504,121 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           </table>
         </div>
       </div>
+      
+      {/* Modal de progreso de exportación */}
+      {exportModal.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: 'var(--color-background)',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>
+                Exportando Plantillas
+              </h3>
+              <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '14px' }}>
+                {exportModal.status}
+              </p>
+            </div>
+            
+            {!exportModal.error && (
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  width: '100%',
+                  height: '8px',
+                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${exportModal.progress}%`,
+                    height: '100%',
+                    backgroundColor: '#3b82f6',
+                    transition: 'width 0.3s ease',
+                    borderRadius: '4px',
+                  }} />
+                </div>
+                <div style={{ 
+                  marginTop: '8px', 
+                  fontSize: '12px', 
+                  color: 'var(--color-muted)',
+                  textAlign: 'center' 
+                }}>
+                  {exportModal.progress}%
+                </div>
+              </div>
+            )}
+            
+            {exportModal.error && (
+              <div style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '24px',
+              }}>
+                <p style={{ margin: 0, color: '#ef4444', fontSize: '14px' }}>
+                  {exportModal.error}
+                </p>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              {exportModal.canCancel && !exportModal.error && (
+                <button
+                  type="button"
+                  onClick={() => setExportModal({ ...exportModal, isOpen: false })}
+                  style={{
+                    padding: '8px 16px',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '8px',
+                    backgroundColor: 'transparent',
+                    color: 'var(--color-foreground)',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                  }}
+                >
+                  Cancelar
+                </button>
+              )}
+              
+              {(exportModal.error || exportModal.progress === 100) && (
+                <button
+                  type="button"
+                  onClick={() => setExportModal({ ...exportModal, isOpen: false })}
+                  style={{
+                    padding: '8px 16px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                  }}
+                >
+                  {exportModal.error ? 'Cerrar' : 'Listo'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
