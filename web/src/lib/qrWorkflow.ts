@@ -382,7 +382,13 @@ function drawTemplateBase(canvas: HTMLCanvasElement, template: TemplateDef): voi
 export async function renderItem(
   item: Item,
   qrIndex: Map<string, UploadedQR>,
-  templateDef: TemplateDef
+  templateDef: TemplateDef,
+  options?: {
+    textColor?: string;
+    isTransparentBackground?: boolean;
+    fontSize?: number;
+    isBold?: boolean;
+  }
 ): Promise<HTMLCanvasElement> {
   const baseDims = templateDef.size ?? getSourceDimensions(templateDef.baseImage);
   const canvas = createCanvas(baseDims.width, baseDims.height);
@@ -395,14 +401,26 @@ export async function renderItem(
     const ctx = canvas.getContext("2d");
     if (ctx) {
       const lb = templateDef.labelBox;
-      // draw white background for label
       ctx.save();
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(lb.x, lb.y, lb.w, lb.h);
-      // draw text
-      const fontSize = Math.max(10, Math.floor(lb.h * 0.6));
-      ctx.fillStyle = "#000000";
-      ctx.font = `${fontSize}px sans-serif`;
+      
+      // draw background for label only if not transparent
+      if (!options?.isTransparentBackground) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(lb.x, lb.y, lb.w, lb.h);
+      }
+      
+      // draw text with user preferences
+      const fontSize = options?.fontSize ?? Math.max(10, Math.floor(lb.h * 0.6));
+      
+      // Convert hex color to RGB if provided
+      let textColor = "#000000"; // default black
+      if (options?.textColor) {
+        textColor = options.textColor;
+      }
+      
+      ctx.fillStyle = textColor;
+      const fontWeight = options?.isBold ? "bold" : "normal";
+      ctx.font = `${fontWeight} ${fontSize}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const textX = lb.x + lb.w / 2;
@@ -448,13 +466,19 @@ export async function exportItem(
 export async function processItems(
   items: WorkItem[],
   qrIndex: Map<string, UploadedQR>,
-  template: TemplateDef
+  template: TemplateDef,
+  options?: {
+    textColor?: string;
+    isTransparentBackground?: boolean;
+    fontSize?: number;
+    isBold?: boolean;
+  }
 ): Promise<ProcessResult[]> {
   const results: ProcessResult[] = [];
   for (const item of items) {
     try {
       const templateForItem = prepareTemplateForItem(template, item);
-      const canvas = await renderItem(item, qrIndex, templateForItem);
+      const canvas = await renderItem(item, qrIndex, templateForItem, options);
       const formato = templateForItem.exportFormat ?? "png";
       const blob = await exportItem(canvas, item.nombreArchivoSalida, formato);
       triggerDownload(blob, item.nombreArchivoSalida, formato);
@@ -474,13 +498,19 @@ export async function processItems(
 export async function processItemsToBlobs(
   items: WorkItem[],
   qrIndex: Map<string, UploadedQR>,
-  template: TemplateDef
+  template: TemplateDef,
+  options?: {
+    textColor?: string;
+    isTransparentBackground?: boolean;
+    fontSize?: number;
+    isBold?: boolean;
+  }
 ): Promise<Array<{ nombre: string; blob: Blob }>> {
   const out: Array<{ nombre: string; blob: Blob }> = [];
   for (const item of items) {
     try {
       const templateForItem = prepareTemplateForItem(template, item);
-      const canvas = await renderItem(item, qrIndex, templateForItem);
+      const canvas = await renderItem(item, qrIndex, templateForItem, options);
       const formato = templateForItem.exportFormat ?? "png";
       const blob = await exportItem(canvas, item.nombreArchivoSalida, formato);
       out.push({ nombre: `${item.nombreArchivoSalida}.${formato}`, blob });

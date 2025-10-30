@@ -706,7 +706,13 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     setProcessing(true);
     setStatus({ type: "info", text: "Procesando lote..." });
     try {
-      const processResults = await processItems(workItems, qrIndex, activeTemplate);
+      const renderOptions = {
+        textColor,
+        isTransparentBackground,
+        fontSize,
+        isBold
+      };
+      const processResults = await processItems(workItems, qrIndex, activeTemplate, renderOptions);
       setResults(processResults);
       setStatus({ type: "info", text: "Proceso finalizado." });
       if (onResults) {
@@ -718,7 +724,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     } finally {
       setProcessing(false);
     }
-  }, [activeTemplate, onResults, qrIndex, workItems]);
+  }, [activeTemplate, onResults, qrIndex, workItems, textColor, isTransparentBackground, fontSize, isBold]);
 
   // Función para exportar ZIP con modal de progreso
   const handleExportZip = useCallback(async () => {
@@ -757,7 +763,13 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       let entries: Array<{ nombre: string; blob: Blob }> = [];
       
       try {
-        entries = await processItemsToBlobs(workItems, qrIndex, activeTemplate);
+        const renderOptions = {
+          textColor,
+          isTransparentBackground,
+          fontSize,
+          isBold
+        };
+        entries = await processItemsToBlobs(workItems, qrIndex, activeTemplate, renderOptions);
         console.log('processItemsToBlobs result:', entries);
         
         if (entries.length === 0) {
@@ -836,7 +848,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       }));
       setStatus({ type: "error", text: `Error al generar ZIP: ${message}` });
     }
-  }, [workItems, qrIndex, activeTemplate]);
+  }, [workItems, qrIndex, activeTemplate, textColor, isTransparentBackground, fontSize, isBold]);
 
   const resultsMap = useMemo(() => {
     const map = new Map<string, ProcessResult>();
