@@ -608,9 +608,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         console.log("🎯 Default frame set:", defaultFrame);
         setFrame(defaultFrame);
         
+        // Asegurar que el labelBox esté dentro del área visible
+        const labelY = Math.min(
+          defaultFrame.y + defaultFrame.h + 8, 
+          img.naturalHeight - 50 // Dejar espacio para el labelBox
+        );
+        
         const defaultLabelBox = { 
           x: defaultFrame.x, 
-          y: defaultFrame.y + defaultFrame.h + 8, 
+          y: Math.max(0, labelY), // No permitir posición negativa
           w: Math.round(defaultFrame.w), 
           h: 40, 
           text: workItems.length > 0 ? workItems[selectedItemIndex]?.nombreArchivoSalida || 'nombre-salida' : 'nombre-salida'
@@ -880,7 +886,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               border: "1px solid rgba(255, 255, 255, 0.28)",
               background: "rgba(15, 23, 42, 0.35)",
               boxShadow: "var(--shadow-soft)",
-              overflow: "hidden",
+              overflow: "visible", // Cambiado temporalmente para debug
             }}
             onMouseMove={(e) => {
               const editorRect = editorRef.current?.getBoundingClientRect();
@@ -1055,15 +1061,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     top,
                     width,
                     height,
-                    border: '2px solid red', // Más visible temporalmente
-                    backgroundColor: '#fff',
+                    border: '3px solid #ff0000', // Borde rojo muy visible
+                    backgroundColor: '#ffff00', // Fondo amarillo muy visible
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     padding: 4,
                     boxSizing: 'border-box',
                     cursor: 'move',
-                    zIndex: 10, // Asegurar que esté por encima
+                    zIndex: 1000, // Z-index muy alto
                   }}
                   onMouseDown={(e) => {
                     const imageRect2 = imageRef.current?.getBoundingClientRect();
