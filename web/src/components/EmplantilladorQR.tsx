@@ -274,15 +274,31 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     }
   }, [labelBox, template]);
 
-  // Actualizar etiqueta cuando cambie el elemento seleccionado
+  // Actualizar etiqueta cuando cambie el elemento seleccionado o inicializar si no existe
   useEffect(() => {
-    if (labelBox && workItems.length > 0 && selectedItemIndex < workItems.length) {
+    if (workItems.length > 0 && selectedItemIndex < workItems.length) {
       const selectedItem = workItems[selectedItemIndex];
-      if (selectedItem?.nombreArchivoSalida) {
-        setLabelBox(prev => prev ? { ...prev, text: selectedItem.nombreArchivoSalida } : null);
+      
+      if (labelBox) {
+        // Si labelBox existe, solo actualizar el texto
+        if (selectedItem?.nombreArchivoSalida) {
+          console.log("🏷️ Updating labelBox text to:", selectedItem.nombreArchivoSalida);
+          setLabelBox(prev => prev ? { ...prev, text: selectedItem.nombreArchivoSalida } : null);
+        }
+      } else if (frame) {
+        // Si labelBox no existe pero tenemos frame, inicializar labelBox
+        const newLabelBox = {
+          x: frame.x,
+          y: frame.y + frame.h + 8,
+          w: frame.w,
+          h: 40,
+          text: selectedItem?.nombreArchivoSalida || 'nombre-salida'
+        };
+        console.log("🏷️ Initializing labelBox:", newLabelBox);
+        setLabelBox(newLabelBox);
       }
     }
-  }, [selectedItemIndex, workItems, labelBox]);
+  }, [selectedItemIndex, workItems, labelBox, frame]);
 
   // No cleanup needed for data URLs
 
@@ -591,13 +607,17 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         
         console.log("🎯 Default frame set:", defaultFrame);
         setFrame(defaultFrame);
-        setLabelBox({ 
+        
+        const defaultLabelBox = { 
           x: defaultFrame.x, 
           y: defaultFrame.y + defaultFrame.h + 8, 
           w: Math.round(defaultFrame.w), 
           h: 40, 
           text: workItems.length > 0 ? workItems[selectedItemIndex]?.nombreArchivoSalida || 'nombre-salida' : 'nombre-salida'
-        });
+        };
+        
+        console.log("🏷️ Default labelBox set:", defaultLabelBox);
+        setLabelBox(defaultLabelBox);
       };
       
       img.onerror = (error) => {
