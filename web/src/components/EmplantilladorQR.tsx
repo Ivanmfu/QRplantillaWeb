@@ -758,6 +758,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         status: 'Procesando plantillas...'
       }));
 
+      console.log('=== DEBUGGING POSITIONS ===');
+      console.log('frame state:', frame);
+      console.log('labelBox state:', labelBox);
+      console.log('template.frame:', template.frame);
+      console.log('template.labelBox:', template.labelBox);
+      console.log('activeTemplate.frame:', activeTemplate.frame);
+      console.log('activeTemplate.labelBox:', activeTemplate.labelBox);
+      console.log('==============================');
+      
       console.log('Calling processItemsToBlobs with:', { workItems, qrIndex, activeTemplate });
       
       let entries: Array<{ nombre: string; blob: Blob }> = [];
