@@ -356,12 +356,16 @@ export function placeQROnTemplate(
   if (!ctx) {
     throw new Error("No se pudo obtener el contexto 2D de la plantilla");
   }
-  const dims = getSourceDimensions(qr);
-  const scale = Math.min(frame.w / dims.width, frame.h / dims.height);
-  const drawWidth = dims.width * scale;
-  const drawHeight = dims.height * scale;
-  const dx = frame.x + (frame.w - drawWidth) / 2;
-  const dy = frame.y + (frame.h - drawHeight) / 2;
+  
+  // Usar las dimensiones exactas del frame sin centrar
+  const dx = frame.x;
+  const dy = frame.y;
+  const drawWidth = frame.w;
+  const drawHeight = frame.h;
+  
+  console.log('🎯 placeQROnTemplate - frame:', frame);
+  console.log('🎯 placeQROnTemplate - drawing at:', { dx, dy, drawWidth, drawHeight });
+  
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
@@ -425,6 +429,11 @@ export async function renderItem(
       ctx.textBaseline = "middle";
       const textX = lb.x + lb.w / 2;
       const textY = lb.y + lb.h / 2;
+      
+      console.log('📝 renderItem - labelBox:', lb);
+      console.log('📝 renderItem - text position:', { textX, textY });
+      console.log('📝 renderItem - text:', templateDef.labelText);
+      
       // clip to label width
       const maxWidth = Math.max(10, lb.w - 8);
       ctx.fillText(templateDef.labelText, textX, textY, maxWidth);
