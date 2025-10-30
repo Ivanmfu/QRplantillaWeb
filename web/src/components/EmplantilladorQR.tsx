@@ -758,21 +758,11 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         status: 'Procesando plantillas...'
       }));
 
-      console.log('=== DEBUGGING POSITIONS ===');
-      console.log('template.size:', template.size);
-      console.log('template.frame (DEFAULT):', template.frame);
-      console.log('template.labelBox (DEFAULT):', template.labelBox);
-      console.log('---');
-      console.log('frame state (USER MOVED):', frame);
-      console.log('labelBox state (USER MOVED):', labelBox);
-      console.log('---');
-      console.log('activeTemplate.size:', activeTemplate.size);
-      console.log('activeTemplate.frame (FINAL):', activeTemplate.frame);
-      console.log('activeTemplate.labelBox (FINAL):', activeTemplate.labelBox);
-      console.log('activeTemplate.labelText:', activeTemplate.labelText);
-      console.log('==============================');
-      
-      console.log('Calling processItemsToBlobs with:', { workItems, qrIndex, activeTemplate });
+      console.log('=== FINAL EXPORT DEBUG ===');
+      console.log('Final activeTemplate.frame:', activeTemplate.frame);
+      console.log('Final activeTemplate.labelBox:', activeTemplate.labelBox);
+      console.log('Final activeTemplate.size:', activeTemplate.size);
+      console.log('==========================')
       
       let entries: Array<{ nombre: string; blob: Blob }> = [];
       

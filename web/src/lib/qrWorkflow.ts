@@ -363,8 +363,7 @@ export function placeQROnTemplate(
   const drawWidth = frame.w;
   const drawHeight = frame.h;
   
-  console.log('🎯 placeQROnTemplate - frame:', frame);
-  console.log('🎯 placeQROnTemplate - drawing at:', { dx, dy, drawWidth, drawHeight });
+  // QR positioning logs cleaned
   
   ctx.save();
   ctx.imageSmoothingEnabled = true;
@@ -381,18 +380,8 @@ function drawTemplateBase(canvas: HTMLCanvasElement, template: TemplateDef): voi
   const source = template.baseImage;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Usar las dimensiones exactas sin estirar la imagen
-  const sourceDims = getSourceDimensions(source);
-  console.log('🖼️ drawTemplateBase - source dimensions:', sourceDims);
-  console.log('🖼️ drawTemplateBase - canvas dimensions:', { width: canvas.width, height: canvas.height });
-  
-  // Si el canvas tiene el mismo tamaño que la imagen, dibujar directamente
-  if (canvas.width === sourceDims.width && canvas.height === sourceDims.height) {
-    ctx.drawImage(source, 0, 0);
-  } else {
-    // Si son diferentes, mantener proporciones o usar tamaño definido por template.size
-    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-  }
+  // Dibujar la imagen base manteniendo las dimensiones exactas
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
 }
 
 export async function renderItem(
@@ -407,13 +396,11 @@ export async function renderItem(
   }
 ): Promise<HTMLCanvasElement> {
   const baseDims = templateDef.size ?? getSourceDimensions(templateDef.baseImage);
-  console.log('🎨 renderItem - templateDef.size:', templateDef.size);
-  console.log('🎨 renderItem - baseDims:', baseDims);
-  console.log('🎨 renderItem - templateDef.frame:', templateDef.frame);
-  console.log('🎨 renderItem - templateDef.labelBox:', templateDef.labelBox);
-  
   const canvas = createCanvas(baseDims.width, baseDims.height);
-  console.log('🎨 renderItem - canvas size:', { width: canvas.width, height: canvas.height });
+  
+  console.log('🎯 EXPORT: Canvas size:', { width: canvas.width, height: canvas.height });
+  console.log('🎯 EXPORT: QR frame:', templateDef.frame);
+  console.log('🎯 EXPORT: Label box:', templateDef.labelBox);
   
   drawTemplateBase(canvas, templateDef);
   const qrSize = Math.round(Math.max(templateDef.frame.w, templateDef.frame.h));
@@ -449,9 +436,7 @@ export async function renderItem(
       const textX = lb.x + lb.w / 2;
       const textY = lb.y + lb.h / 2;
       
-      console.log('📝 renderItem - labelBox:', lb);
-      console.log('📝 renderItem - text position:', { textX, textY });
-      console.log('📝 renderItem - text:', templateDef.labelText);
+      // Text positioning logs cleaned
       
       // clip to label width
       const maxWidth = Math.max(10, lb.w - 8);
