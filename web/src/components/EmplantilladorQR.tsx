@@ -112,6 +112,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const [frame, setFrame] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [labelBox, setLabelBox] = useState<LabelBoxShape | null>(null);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number>(0);
+  const [fontSize, setFontSize] = useState<number>(14);
+  const [isBold, setIsBold] = useState<boolean>(false);
+  const [showGuides, setShowGuides] = useState<{ horizontal: boolean; vertical: boolean }>({ horizontal: false, vertical: false });
   const editorRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef<DragState | null>(null);
   const [results, setResults] = useState<ProcessResult[]>([]);
@@ -902,10 +905,25 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 const newDisplayedY = y - dragging.offsetY;
                 const newNatX = Math.round(newDisplayedX / scale);
                 const newNatY = Math.round(newDisplayedY / scale);
+                const finalX = Math.max(0, Math.min(newNatX, Math.round(img.naturalWidth - frame.w)));
+                const finalY = Math.max(0, Math.min(newNatY, Math.round(img.naturalHeight - frame.h)));
+                
+                // Calcular si está centrado (con tolerancia de 5px)
+                const centerX = finalX + frame.w / 2;
+                const centerY = finalY + frame.h / 2;
+                const canvasCenterX = img.naturalWidth / 2;
+                const canvasCenterY = img.naturalHeight / 2;
+                const tolerance = 5;
+                
+                const isHorizontallyCentered = Math.abs(centerX - canvasCenterX) <= tolerance;
+                const isVerticallyCentered = Math.abs(centerY - canvasCenterY) <= tolerance;
+                
+                setShowGuides({ horizontal: isHorizontallyCentered, vertical: isVerticallyCentered });
+                
                 setFrame({
                   ...frame,
-                  x: Math.max(0, Math.min(newNatX, Math.round(img.naturalWidth - frame.w))),
-                  y: Math.max(0, Math.min(newNatY, Math.round(img.naturalHeight - frame.h))),
+                  x: finalX,
+                  y: finalY,
                 });
               }
               if (dragging && dragging.type === 'label' && labelBox) {
@@ -913,10 +931,25 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 const newDisplayedY = y - dragging.offsetY;
                 const newNatX = Math.round(newDisplayedX / scale);
                 const newNatY = Math.round(newDisplayedY / scale);
+                const finalX = Math.max(0, Math.min(newNatX, Math.round(img.naturalWidth - labelBox.w)));
+                const finalY = Math.max(0, Math.min(newNatY, Math.round(img.naturalHeight - labelBox.h)));
+                
+                // Calcular si está centrado (con tolerancia de 5px)
+                const centerX = finalX + labelBox.w / 2;
+                const centerY = finalY + labelBox.h / 2;
+                const canvasCenterX = img.naturalWidth / 2;
+                const canvasCenterY = img.naturalHeight / 2;
+                const tolerance = 5;
+                
+                const isHorizontallyCentered = Math.abs(centerX - canvasCenterX) <= tolerance;
+                const isVerticallyCentered = Math.abs(centerY - canvasCenterY) <= tolerance;
+                
+                setShowGuides({ horizontal: isHorizontallyCentered, vertical: isVerticallyCentered });
+                
                 setLabelBox({
                   ...labelBox,
-                  x: Math.max(0, Math.min(newNatX, Math.round(img.naturalWidth - labelBox.w))),
-                  y: Math.max(0, Math.min(newNatY, Math.round(img.naturalHeight - labelBox.h))),
+                  x: finalX,
+                  y: finalY,
                 });
               }
               const resizing = resizingRef.current;
@@ -957,6 +990,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             onMouseUp={() => {
               draggingRef.current = null;
               resizingRef.current = null;
+              setShowGuides({ horizontal: false, vertical: false });
             }}
           >
             <img
@@ -1079,7 +1113,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   }}
                 >
                   <input
-                    style={{ width: '100%', border: 'none', outline: 'none', textAlign: 'center' }}
+                    style={{ 
+                      width: '100%', 
+                      border: 'none', 
+                      outline: 'none', 
+                      textAlign: 'center',
+                      fontSize: `${fontSize}px`,
+                      fontWeight: isBold ? 'bold' : 'normal',
+                      fontFamily: 'Arial, sans-serif'
+                    }}
                     value={labelBox.text}
                     onChange={(e) => setLabelBox({ ...labelBox, text: e.target.value })}
                   />
@@ -1100,6 +1142,51 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     style={{ position: 'absolute', right: 0, bottom: 0, width: 12, height: 12, background: '#333', cursor: 'nwse-resize' }}
                   />
                 </div>
+              );
+            })()}
+            
+            {/* Guías de centrado */}
+            {imageRef.current && (showGuides.horizontal || showGuides.vertical) && (() => {
+              const img = imageRef.current!;
+              const imageRect = img.getBoundingClientRect();
+              const editorRect = editorRef.current!.getBoundingClientRect();
+              const scale = img.naturalWidth > 0 ? imageRect.width / img.naturalWidth : 1;
+              const offsetLeft = Math.round(imageRect.left - editorRect.left);
+              const offsetTop = Math.round(imageRect.top - editorRect.top);
+              
+              return (
+                <>
+                  {/* Guía horizontal (línea vertical) */}
+                  {showGuides.horizontal && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: offsetLeft + Math.round((img.naturalWidth / 2) * scale),
+                        top: offsetTop,
+                        width: '1px',
+                        height: Math.round(img.naturalHeight * scale),
+                        backgroundColor: '#ff6b6b',
+                        zIndex: 5,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  )}
+                  {/* Guía vertical (línea horizontal) */}
+                  {showGuides.vertical && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: offsetLeft,
+                        top: offsetTop + Math.round((img.naturalHeight / 2) * scale),
+                        width: Math.round(img.naturalWidth * scale),
+                        height: '1px',
+                        backgroundColor: '#ff6b6b',
+                        zIndex: 5,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  )}
+                </>
               );
             })()}
           </div>
@@ -1208,6 +1295,29 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   disabled={!labelBox}
                   style={styles.editorFieldInput}
                 />
+              </label>
+              <label style={styles.editorField}>
+                <span style={styles.editorFieldLabel}>Tamaño</span>
+                <input
+                  type="number"
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Math.max(8, Math.min(72, parseInt(e.target.value) || 14)))}
+                  min={8}
+                  max={72}
+                  step={1}
+                  disabled={!labelBox}
+                  style={styles.editorFieldInput}
+                />
+              </label>
+              <label style={{...styles.editorField, flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
+                <input
+                  type="checkbox"
+                  checked={isBold}
+                  onChange={(e) => setIsBold(e.target.checked)}
+                  disabled={!labelBox}
+                  style={{ margin: 0 }}
+                />
+                <span style={styles.editorFieldLabel}>Negrita</span>
               </label>
             </div>
           </div>
