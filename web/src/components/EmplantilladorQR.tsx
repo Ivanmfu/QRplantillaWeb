@@ -869,6 +869,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             )}
           </div>
           {templateSizeText && <div style={styles.editorMeta}>Dimensiones: {templateSizeText}</div>}
+          {(() => { console.log("🎯 Editor render - frame:", frame, "labelBox:", labelBox); return null; })()}
           <div
             ref={editorRef}
             style={{
@@ -1032,6 +1033,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             })()}
 
             {labelBox && imageRef.current && (() => {
+              console.log("🏷️ Rendering labelBox:", labelBox);
               const img = imageRef.current!;
               const imageRect = img.getBoundingClientRect();
               const editorRect = editorRef.current!.getBoundingClientRect();
@@ -1042,6 +1044,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const top = offsetTop + Math.round(labelBox.y * scale);
               const width = Math.round(labelBox.w * scale);
               const height = Math.round(labelBox.h * scale);
+              
+              console.log("🏷️ Label position:", { left, top, width, height, scale });
+              
               return (
                 <div
                   style={{
@@ -1050,7 +1055,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     top,
                     width,
                     height,
-                    border: '1px solid #333',
+                    border: '2px solid red', // Más visible temporalmente
                     backgroundColor: '#fff',
                     display: 'flex',
                     alignItems: 'center',
@@ -1058,6 +1063,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     padding: 4,
                     boxSizing: 'border-box',
                     cursor: 'move',
+                    zIndex: 10, // Asegurar que esté por encima
                   }}
                   onMouseDown={(e) => {
                     const imageRect2 = imageRef.current?.getBoundingClientRect();
