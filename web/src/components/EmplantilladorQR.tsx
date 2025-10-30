@@ -289,13 +289,22 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         }
       } else if (frame) {
         // Si labelBox no existe pero tenemos frame, inicializar labelBox
-        const labelY = Math.min(
-          frame.y + frame.h + 8, 
-          (templateImage?.naturalHeight || 600) - 50
-        );
+        const imgHeight = templateImage?.naturalHeight || 600;
+        const editorHeight = Math.min(800, imgHeight);
+        const availableSpace = editorHeight - (frame.y + frame.h) - 50;
+        
+        let labelY;
+        if (availableSpace > 40) {
+          // Hay espacio debajo del QR
+          labelY = frame.y + frame.h + 8;
+        } else {
+          // No hay espacio debajo, colocar arriba del QR
+          labelY = Math.max(8, frame.y - 48);
+        }
+        
         const newLabelBox = {
           x: frame.x,
-          y: Math.max(0, labelY),
+          y: labelY,
           w: frame.w,
           h: 40,
           text: selectedItem?.nombreArchivoSalida || 'nombre-salida'
@@ -614,14 +623,22 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         setFrame(defaultFrame);
         
         // Asegurar que el labelBox esté dentro del área visible
-        const labelY = Math.min(
-          defaultFrame.y + defaultFrame.h + 8, 
-          img.naturalHeight - 50 // Dejar espacio para el labelBox
-        );
+        // Calcular el espacio disponible considerando la escala del editor
+        const editorHeight = Math.min(800, img.naturalHeight);
+        const availableSpace = editorHeight - (defaultFrame.y + defaultFrame.h) - 50;
+        
+        let labelY;
+        if (availableSpace > 40) {
+          // Hay espacio debajo del QR
+          labelY = defaultFrame.y + defaultFrame.h + 8;
+        } else {
+          // No hay espacio debajo, colocar arriba del QR
+          labelY = Math.max(8, defaultFrame.y - 48);
+        }
         
         const defaultLabelBox = { 
           x: defaultFrame.x, 
-          y: Math.max(0, labelY), // No permitir posición negativa
+          y: labelY,
           w: Math.round(defaultFrame.w), 
           h: 40, 
           text: workItems.length > 0 ? workItems[selectedItemIndex]?.nombreArchivoSalida || 'nombre-salida' : 'nombre-salida'
