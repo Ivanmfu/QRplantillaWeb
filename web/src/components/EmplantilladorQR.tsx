@@ -111,6 +111,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const [templateBlobUrl, setTemplateBlobUrl] = useState<string | null>(null);
   const [frame, setFrame] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [labelBox, setLabelBox] = useState<LabelBoxShape | null>(null);
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number>(0);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef<DragState | null>(null);
   const [results, setResults] = useState<ProcessResult[]>([]);
@@ -273,6 +274,16 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     }
   }, [labelBox, template]);
 
+  // Actualizar etiqueta cuando cambie el elemento seleccionado
+  useEffect(() => {
+    if (labelBox && workItems.length > 0 && selectedItemIndex < workItems.length) {
+      const selectedItem = workItems[selectedItemIndex];
+      if (selectedItem?.nombreArchivoSalida) {
+        setLabelBox(prev => prev ? { ...prev, text: selectedItem.nombreArchivoSalida } : null);
+      }
+    }
+  }, [selectedItemIndex, workItems, labelBox]);
+
   // No cleanup needed for data URLs
 
   const updateFrameField = useCallback(
@@ -385,7 +396,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         setQrPreviewUrl(null);
         return;
       }
-      const sample = workItems[0];
+      const sample = workItems[selectedItemIndex] || workItems[0];
       try {
         const qrFrame = activeTemplate.frame;
         const size = Math.round(Math.max(qrFrame.w, qrFrame.h));
@@ -398,7 +409,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     }
     gen();
     return () => { mounted = false; };
-  }, [activeTemplate, qrIndex, workItems]);
+  }, [activeTemplate, qrIndex, workItems, selectedItemIndex]);
 
   useEffect(() => {
     let cancelled = false;
@@ -585,7 +596,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           y: defaultFrame.y + defaultFrame.h + 8, 
           w: Math.round(defaultFrame.w), 
           h: 40, 
-          text: 'nombre-salida' 
+          text: workItems.length > 0 ? workItems[selectedItemIndex]?.nombreArchivoSalida || 'nombre-salida' : 'nombre-salida'
         });
       };
       
@@ -810,7 +821,33 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
 
       {editorImageSrc && (
         <div style={styles.templateEditor}>
-          <h4>Editor visual</h4>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h4 style={{ margin: 0 }}>Editor visual y vista previa</h4>
+            {workItems.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedItemIndex(Math.max(0, selectedItemIndex - 1))}
+                  disabled={selectedItemIndex === 0}
+                  style={{ padding: '4px 8px', fontSize: '12px' }}
+                >
+                  ← Anterior
+                </button>
+                <span style={{ fontSize: '12px', color: '#666' }}>
+                  {selectedItemIndex + 1} de {workItems.length}
+                  {workItems[selectedItemIndex] && ` - ${workItems[selectedItemIndex].nombreArchivoSalida}`}
+                </span>
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedItemIndex(Math.min(workItems.length - 1, selectedItemIndex + 1))}
+                  disabled={selectedItemIndex >= workItems.length - 1}
+                  style={{ padding: '4px 8px', fontSize: '12px' }}
+                >
+                  Siguiente →
+                </button>
+              </div>
+            )}
+          </div>
           {templateSizeText && <div style={styles.editorMeta}>Dimensiones: {templateSizeText}</div>}
           <div
             ref={editorRef}
@@ -1176,15 +1213,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       )}
 
       <div style={styles.content}>
-        <div style={styles.preview}>
-          <h3>Vista previa</h3>
-          {previewUrl ? (
-            <img src={previewUrl} alt="Vista previa del QR" style={styles.previewImage} />
-          ) : (
-            <div style={styles.previewPlaceholder}>Selecciona datos para ver la vista previa</div>
-          )}
-        </div>
-
         <div style={styles.tableWrapper}>
           <h3>Lote</h3>
           <table style={styles.table}>
