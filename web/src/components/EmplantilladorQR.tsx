@@ -282,19 +282,21 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       if (labelBox) {
         // Si labelBox existe, solo actualizar el texto
         if (selectedItem?.nombreArchivoSalida) {
-          console.log("🏷️ Updating labelBox text to:", selectedItem.nombreArchivoSalida);
           setLabelBox(prev => prev ? { ...prev, text: selectedItem.nombreArchivoSalida } : null);
         }
       } else if (frame) {
         // Si labelBox no existe pero tenemos frame, inicializar labelBox
+        const labelY = Math.min(
+          frame.y + frame.h + 8, 
+          (templateImage?.naturalHeight || 600) - 50
+        );
         const newLabelBox = {
           x: frame.x,
-          y: frame.y + frame.h + 8,
+          y: Math.max(0, labelY),
           w: frame.w,
           h: 40,
           text: selectedItem?.nombreArchivoSalida || 'nombre-salida'
         };
-        console.log("🏷️ Initializing labelBox:", newLabelBox);
         setLabelBox(newLabelBox);
       }
     }
@@ -622,7 +624,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           text: workItems.length > 0 ? workItems[selectedItemIndex]?.nombreArchivoSalida || 'nombre-salida' : 'nombre-salida'
         };
         
-        console.log("🏷️ Default labelBox set:", defaultLabelBox);
         setLabelBox(defaultLabelBox);
       };
       
@@ -875,7 +876,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             )}
           </div>
           {templateSizeText && <div style={styles.editorMeta}>Dimensiones: {templateSizeText}</div>}
-          {(() => { console.log("🎯 Editor render - frame:", frame, "labelBox:", labelBox); return null; })()}
           <div
             ref={editorRef}
             style={{
@@ -886,7 +886,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               border: "1px solid rgba(255, 255, 255, 0.28)",
               background: "rgba(15, 23, 42, 0.35)",
               boxShadow: "var(--shadow-soft)",
-              overflow: "visible", // Cambiado temporalmente para debug
+              overflow: "hidden",
             }}
             onMouseMove={(e) => {
               const editorRect = editorRef.current?.getBoundingClientRect();
@@ -1039,7 +1039,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             })()}
 
             {labelBox && imageRef.current && (() => {
-              console.log("🏷️ Rendering labelBox:", labelBox);
               const img = imageRef.current!;
               const imageRect = img.getBoundingClientRect();
               const editorRect = editorRef.current!.getBoundingClientRect();
@@ -1051,8 +1050,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const width = Math.round(labelBox.w * scale);
               const height = Math.round(labelBox.h * scale);
               
-              console.log("🏷️ Label position:", { left, top, width, height, scale });
-              
               return (
                 <div
                   style={{
@@ -1061,15 +1058,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     top,
                     width,
                     height,
-                    border: '3px solid #ff0000', // Borde rojo muy visible
-                    backgroundColor: '#ffff00', // Fondo amarillo muy visible
+                    border: '1px solid #333',
+                    backgroundColor: '#fff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     padding: 4,
                     boxSizing: 'border-box',
                     cursor: 'move',
-                    zIndex: 1000, // Z-index muy alto
+                    zIndex: 10,
                   }}
                   onMouseDown={(e) => {
                     const imageRect2 = imageRef.current?.getBoundingClientRect();
