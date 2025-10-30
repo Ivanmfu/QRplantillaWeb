@@ -1213,7 +1213,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             })()}
 
             {labelBox && imageRef.current && (() => {
-              console.log("🏷️ DEBUG: LabelBox rendering:", labelBox, "fontSize:", fontSize, "isBold:", isBold);
+              // console.log("🏷️ DEBUG: LabelBox rendering:", labelBox, "fontSize:", fontSize, "isBold:", isBold);
               const img = imageRef.current!;
               const imageRect = img.getBoundingClientRect();
               const editorRect = editorRef.current!.getBoundingClientRect();
@@ -1224,7 +1224,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const top = offsetTop + Math.round(labelBox.y * scale);
               const width = Math.round(labelBox.w * scale);
               const height = Math.round(labelBox.h * scale);
-              console.log("🏷️ DEBUG: Position:", { left, top, width, height });
+              // console.log("🏷️ DEBUG: Position:", { left, top, width, height });
               
               return (
                 <div

@@ -380,7 +380,19 @@ function drawTemplateBase(canvas: HTMLCanvasElement, template: TemplateDef): voi
   }
   const source = template.baseImage;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  
+  // Usar las dimensiones exactas sin estirar la imagen
+  const sourceDims = getSourceDimensions(source);
+  console.log('🖼️ drawTemplateBase - source dimensions:', sourceDims);
+  console.log('🖼️ drawTemplateBase - canvas dimensions:', { width: canvas.width, height: canvas.height });
+  
+  // Si el canvas tiene el mismo tamaño que la imagen, dibujar directamente
+  if (canvas.width === sourceDims.width && canvas.height === sourceDims.height) {
+    ctx.drawImage(source, 0, 0);
+  } else {
+    // Si son diferentes, mantener proporciones o usar tamaño definido por template.size
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  }
 }
 
 export async function renderItem(
@@ -395,7 +407,14 @@ export async function renderItem(
   }
 ): Promise<HTMLCanvasElement> {
   const baseDims = templateDef.size ?? getSourceDimensions(templateDef.baseImage);
+  console.log('🎨 renderItem - templateDef.size:', templateDef.size);
+  console.log('🎨 renderItem - baseDims:', baseDims);
+  console.log('🎨 renderItem - templateDef.frame:', templateDef.frame);
+  console.log('🎨 renderItem - templateDef.labelBox:', templateDef.labelBox);
+  
   const canvas = createCanvas(baseDims.width, baseDims.height);
+  console.log('🎨 renderItem - canvas size:', { width: canvas.width, height: canvas.height });
+  
   drawTemplateBase(canvas, templateDef);
   const qrSize = Math.round(Math.max(templateDef.frame.w, templateDef.frame.h));
   const qrCanvas = await getQRForItem(item, qrIndex, qrSize);
