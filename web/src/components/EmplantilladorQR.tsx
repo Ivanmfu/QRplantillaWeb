@@ -753,13 +753,34 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       }));
 
       console.log('Calling processItemsToBlobs with:', { workItems, qrIndex, activeTemplate });
-      const entries = await processItemsToBlobs(workItems, qrIndex, activeTemplate);
-      console.log('processItemsToBlobs result:', entries);
       
-      if (entries.length === 0) {
+      let entries: Array<{ nombre: string; blob: Blob }> = [];
+      
+      try {
+        entries = await processItemsToBlobs(workItems, qrIndex, activeTemplate);
+        console.log('processItemsToBlobs result:', entries);
+        
+        if (entries.length === 0) {
+          console.error('No entries generated - checking why...');
+          console.log('workItems detailed:', workItems.map(item => ({
+            numero: item.numero,
+            enlace: item.enlace,
+            nombreArchivoSalida: item.nombreArchivoSalida,
+            origenQR: item.origenQR
+          })));
+          
+          setExportModal(prev => ({
+            ...prev,
+            error: 'No se generaron archivos para el ZIP. Verifica que los datos sean correctos.',
+            canCancel: false
+          }));
+          return;
+        }
+      } catch (processError) {
+        console.error('Error in processItemsToBlobs:', processError);
         setExportModal(prev => ({
           ...prev,
-          error: 'No se generaron archivos para el ZIP',
+          error: `Error al procesar plantillas: ${processError instanceof Error ? processError.message : String(processError)}`,
           canCancel: false
         }));
         return;
@@ -1515,19 +1536,27 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       
       {/* Modal de progreso de exportación */}
       {exportModal.isOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          overflow: 'auto',
-        }}>
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            zIndex: 9999,
+            paddingTop: '10vh',
+          }}
+          onClick={(e) => {
+            // Cerrar modal si se hace click en el overlay (no en el contenido)
+            if (e.target === e.currentTarget && exportModal.canCancel) {
+              setExportModal(prev => ({ ...prev, isOpen: false }));
+            }
+          }}
+        >
           <div style={{
             backgroundColor: 'var(--color-background)',
             borderRadius: '16px',
