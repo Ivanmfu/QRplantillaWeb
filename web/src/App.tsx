@@ -76,8 +76,7 @@ export const App: React.FC = () => {
             <span className="app-badge">PlantillAuto</span>
             <h1 className="app-title">Plantilla Auto QR</h1>
             <p className="app-description">
-              Emplantilla tus QRs para tu carta digital. Arrastra tu CSV con los enlaces para generar los QR,
-               o sube los códigos QR y sube tu plantilla para configurarla.
+              Emplantilla tus QRs y crea fácilmente tu carta digital. Arrastra tu CSV con los enlaces o sube tus códigos y plantilla para configurarlos.
             </p>
           </header>
           <EmplantilladorQR template={template} />
