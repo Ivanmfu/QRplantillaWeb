@@ -40,7 +40,7 @@ jobs:
         echo "=== Listing web/dist directory ==="
         ls -la web/dist || (echo "web/dist not found" && exit 1)
         echo "=== Checking index.html ==="
-        head -15 web/dist/index.html || true
+        head -15 web/dist/index.html || (echo "index.html not found" && exit 1)
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v4
