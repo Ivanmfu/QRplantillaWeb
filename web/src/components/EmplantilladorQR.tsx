@@ -152,6 +152,17 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           height: templateImage.naturalHeight || templateImage.height,
         }
       : template.size;
+    
+    console.log("📐 ACTIVETEMPLATE SIZE CALCULATION:");
+    console.log("📐 templateImage exists:", !!templateImage);
+    console.log("📐 templateImage dimensions:", templateImage ? { 
+      naturalWidth: templateImage.naturalWidth, 
+      naturalHeight: templateImage.naturalHeight, 
+      width: templateImage.width, 
+      height: templateImage.height 
+    } : 'none');
+    console.log("📐 calculated size:", size);
+    console.log("📐 template.size (default):", template.size);
     const frameToUse = frame ?? template.frame;
     const labelFrame = labelBox
       ? { x: labelBox.x, y: labelBox.y, w: labelBox.w, h: labelBox.h }
