@@ -620,12 +620,13 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         setTemplateImage(img);
         setStatus({ type: "info", text: `Plantilla cargada: ${img.naturalWidth}×${img.naturalHeight}px` });
         
-        // set default frame centered
+        // set default frame TRULY centered
+        const qrSize = Math.round(Math.min(img.naturalWidth, img.naturalHeight) * 0.3); // 30% del lado menor
         const defaultFrame = { 
-          x: Math.round(img.naturalWidth * 0.25), 
-          y: Math.round(img.naturalHeight * 0.25), 
-          w: Math.round(img.naturalWidth * 0.5), 
-          h: Math.round(img.naturalHeight * 0.5) 
+          x: Math.round((img.naturalWidth - qrSize) / 2),   // Centrado horizontalmente
+          y: Math.round((img.naturalHeight - qrSize) / 2),  // Centrado verticalmente
+          w: qrSize, 
+          h: qrSize 
         };
         
         console.log("🎯 Default frame set:", defaultFrame);
@@ -759,9 +760,13 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       }));
 
       console.log('=== FINAL EXPORT DEBUG ===');
+      console.log('Template image natural size:', templateImage ? { 
+        width: templateImage.naturalWidth, 
+        height: templateImage.naturalHeight 
+      } : 'No custom template');
+      console.log('Template size setting:', activeTemplate.size);
       console.log('Final activeTemplate.frame:', activeTemplate.frame);
       console.log('Final activeTemplate.labelBox:', activeTemplate.labelBox);
-      console.log('Final activeTemplate.size:', activeTemplate.size);
       console.log('==========================')
       
       let entries: Array<{ nombre: string; blob: Blob }> = [];
