@@ -73,12 +73,11 @@ export const App: React.FC = () => {
       <main className="app-main">
         <section className="app-surface">
           <header className="app-header">
-            <span className="app-badge">Flujo líquido</span>
+            <span className="app-badge">PlantillAuto</span>
             <h1 className="app-title">Plantilla Auto QR</h1>
             <p className="app-description">
-              Organiza y exporta tus plantillas con una interfaz inspirada en iOS: arrastra tu CSV,
-              sube los códigos QR y configura la plantilla en un entorno de vidrio líquido y
-              reflejos suaves.
+              Emplantilla tus QRs para tu carta digital. Arrastra tu CSV con los enlaces para generar los QR,
+               o sube los códigos QR y sube tu plantilla para configurarla.
             </p>
           </header>
           <EmplantilladorQR template={template} />
