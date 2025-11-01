@@ -174,6 +174,10 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       next.labelText = labelText;
     }
 
+    console.log("🔍 ACTIVE TEMPLATE CREATED:");
+    console.log("🔍 frameToUse:", frameToUse);
+    console.log("🔍 labelFrame:", labelFrame);
+    
     return next;
   }, [exportFormat, frame, labelBox, template, templateImage]);
 
@@ -270,10 +274,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   }, [templateBlobUrl, templateImage, template]);
 
   useEffect(() => {
-    if (!frame && template.frame) {
+    // Solo usar template.frame si no hay plantilla personalizada y no hay frame personalizado
+    if (!frame && template.frame && !templateImage) {
+      console.log("⚠️ OVERRIDING frame with template.frame:", template.frame);
       setFrame({ ...template.frame });
     }
-  }, [frame, template]);
+  }, [frame, template, templateImage]);
 
   useEffect(() => {
     if (!labelBox) {
@@ -629,7 +635,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           h: qrSize 
         };
         
-        console.log("🎯 Default frame set:", defaultFrame);
+        console.log("🎯 SETTING CENTERED FRAME:", defaultFrame);
+        console.log("🎯 Image dimensions:", { width: img.naturalWidth, height: img.naturalHeight });
+        console.log("🎯 QR should be centered at:", { 
+          centerX: defaultFrame.x + defaultFrame.w/2, 
+          centerY: defaultFrame.y + defaultFrame.h/2 
+        });
         setFrame(defaultFrame);
         
         // Asegurar que el labelBox esté dentro del área visible
