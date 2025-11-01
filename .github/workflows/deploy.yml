@@ -1,52 +1,52 @@
 name: Deploy to GitHub Pages
-
 on:
   push:
     branches: [ main ]
 
-# Permisos necesarios para GitHub Pages
+# Permisos necesarios para poder push con GITHUB_TOKEN
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-      
+      with:
+        persist-credentials: true
+        fetch-depth: 0
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        
+
     - name: Install dependencies
       run: |
         cd web
         npm ci
-        
+
     - name: Build
       run: |
         cd web
         npm run build
-        
+
     - name: Verify build output
       run: |
-        echo "=== Listing dist directory ==="
-        ls -la dist/
+        echo "=== Listing web/dist directory ==="
+        ls -la web/dist || (echo "web/dist not found" && exit 1)
         echo "=== Checking index.html ==="
-        head -15 dist/index.html
-        echo "=== Checking cleanup.js ==="
-        ls -la dist/cleanup.js
-        
+        head -15 web/dist/index.html || true
+
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v4
       if: github.ref == 'refs/heads/main'
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./dist
+        publish_dir: ./web/dist
         force_orphan: true
         enable_jekyll: false
