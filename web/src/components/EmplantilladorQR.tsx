@@ -1053,23 +1053,29 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const img = imageRef.current;
               if (!editorRect || !img) return;
               const imageRect = img.getBoundingClientRect();
-              const scale = img.naturalWidth > 0 ? imageRect.width / img.naturalWidth : 1;
-              const x = e.clientX - imageRect.left;
-              const y = e.clientY - imageRect.top;
+              const natW = img.naturalWidth || img.width;
+              const natH = img.naturalHeight || img.height;
+              const scale = natW > 0 && natH > 0 ? Math.min(imageRect.width / natW, imageRect.height / natH) : 1;
+              const displayedW = natW * scale;
+              const displayedH = natH * scale;
+              const padLeft = (imageRect.width - displayedW) / 2;
+              const padTop = (imageRect.height - displayedH) / 2;
+              const x = e.clientX - imageRect.left - padLeft;
+              const y = e.clientY - imageRect.top - padTop;
               const dragging = draggingRef.current;
               if (dragging && dragging.type === 'qr' && frame) {
                 const newDisplayedX = x - dragging.offsetX;
                 const newDisplayedY = y - dragging.offsetY;
                 const newNatX = Math.round(newDisplayedX / scale);
                 const newNatY = Math.round(newDisplayedY / scale);
-                const finalX = Math.max(0, Math.min(newNatX, Math.round(img.naturalWidth - frame.w)));
-                const finalY = Math.max(0, Math.min(newNatY, Math.round(img.naturalHeight - frame.h)));
+                const finalX = Math.max(0, Math.min(newNatX, Math.round(natW - frame.w)));
+                const finalY = Math.max(0, Math.min(newNatY, Math.round(natH - frame.h)));
                 
                 // Calcular si está centrado (con tolerancia de 5px)
                 const centerX = finalX + frame.w / 2;
                 const centerY = finalY + frame.h / 2;
-                const canvasCenterX = img.naturalWidth / 2;
-                const canvasCenterY = img.naturalHeight / 2;
+                const canvasCenterX = natW / 2;
+                const canvasCenterY = natH / 2;
                 const tolerance = 5;
                 
                 const isHorizontallyCentered = Math.abs(centerX - canvasCenterX) <= tolerance;
@@ -1088,14 +1094,14 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 const newDisplayedY = y - dragging.offsetY;
                 const newNatX = Math.round(newDisplayedX / scale);
                 const newNatY = Math.round(newDisplayedY / scale);
-                const finalX = Math.max(0, Math.min(newNatX, Math.round(img.naturalWidth - labelBox.w)));
-                const finalY = Math.max(0, Math.min(newNatY, Math.round(img.naturalHeight - labelBox.h)));
+                const finalX = Math.max(0, Math.min(newNatX, Math.round(natW - labelBox.w)));
+                const finalY = Math.max(0, Math.min(newNatY, Math.round(natH - labelBox.h)));
                 
                 // Calcular si está centrado (con tolerancia de 5px)
                 const centerX = finalX + labelBox.w / 2;
                 const centerY = finalY + labelBox.h / 2;
-                const canvasCenterX = img.naturalWidth / 2;
-                const canvasCenterY = img.naturalHeight / 2;
+                const canvasCenterX = natW / 2;
+                const canvasCenterY = natH / 2;
                 const tolerance = 5;
                 
                 const isHorizontallyCentered = Math.abs(centerX - canvasCenterX) <= tolerance;
@@ -1116,8 +1122,8 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 if (resizing.target === 'qr') {
                   setFrame((prev) => {
                     const baseFrame = prev ?? resizing.startFrame;
-                    const maxW = Math.max(8, Math.round(img.naturalWidth - baseFrame.x));
-                    const maxH = Math.max(8, Math.round(img.naturalHeight - baseFrame.y));
+                    const maxW = Math.max(8, Math.round(natW - baseFrame.x));
+                    const maxH = Math.max(8, Math.round(natH - baseFrame.y));
                     const nextW = clamp(Math.round(resizing.startFrame.w + dx), 8, maxW);
                     const nextH = clamp(Math.round(resizing.startFrame.h + dy), 8, maxH);
                     if (prev && prev.w === nextW && prev.h === nextH) {
@@ -1135,8 +1141,8 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                       text: resizing.startText ?? prev?.text ?? '',
                     };
                     const baseBox = prev ?? startBox;
-                    const maxW = Math.max(8, Math.round(img.naturalWidth - baseBox.x));
-                    const maxH = Math.max(8, Math.round(img.naturalHeight - baseBox.y));
+                    const maxW = Math.max(8, Math.round(natW - baseBox.x));
+                    const maxH = Math.max(8, Math.round(natH - baseBox.y));
                     const nextW = clamp(Math.round(resizing.startFrame.w + dx), 8, maxW);
                     const nextH = clamp(Math.round(resizing.startFrame.h + dy), 8, maxH);
                     return { ...baseBox, w: nextW, h: nextH };
@@ -1172,11 +1178,17 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const img = imageRef.current!;
               const imageRect = img.getBoundingClientRect();
               const editorRect = editorRef.current!.getBoundingClientRect();
-              const scale = img.naturalWidth > 0 ? imageRect.width / img.naturalWidth : 1;
+              const natW = img.naturalWidth || img.width;
+              const natH = img.naturalHeight || img.height;
+              const scale = natW > 0 && natH > 0 ? Math.min(imageRect.width / natW, imageRect.height / natH) : 1;
+              const displayedW = natW * scale;
+              const displayedH = natH * scale;
+              const padLeft = (imageRect.width - displayedW) / 2;
+              const padTop = (imageRect.height - displayedH) / 2;
               const offsetLeft = Math.round(imageRect.left - editorRect.left);
               const offsetTop = Math.round(imageRect.top - editorRect.top);
-              const left = offsetLeft + Math.round(frame.x * scale);
-              const top = offsetTop + Math.round(frame.y * scale);
+              const left = offsetLeft + Math.round(padLeft + frame.x * scale);
+              const top = offsetTop + Math.round(padTop + frame.y * scale);
               const width = Math.round(frame.w * scale);
               const height = Math.round(frame.h * scale);
               return (
@@ -1196,12 +1208,20 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     backgroundColor: 'rgba(255,255,255,0.0)',
                   }}
                   onMouseDown={(e) => {
-                    const imageRect2 = imageRef.current?.getBoundingClientRect();
-                    if (!imageRect2) return;
+                    const imgEl = imageRef.current;
+                    if (!imgEl) return;
+                    const imageRect2 = imgEl.getBoundingClientRect();
+                    const natW2 = imgEl.naturalWidth || imgEl.width;
+                    const natH2 = imgEl.naturalHeight || imgEl.height;
+                    const scale2 = natW2 > 0 && natH2 > 0 ? Math.min(imageRect2.width / natW2, imageRect2.height / natH2) : 1;
+                    const displayedW2 = natW2 * scale2;
+                    const displayedH2 = natH2 * scale2;
+                    const padLeft2 = (imageRect2.width - displayedW2) / 2;
+                    const padTop2 = (imageRect2.height - displayedH2) / 2;
                     draggingRef.current = {
                       type: 'qr',
-                      offsetX: e.clientX - imageRect2.left - Math.round(frame.x * scale),
-                      offsetY: e.clientY - imageRect2.top - Math.round(frame.y * scale),
+                      offsetX: e.clientX - imageRect2.left - padLeft2 - Math.round(frame.x * scale2),
+                      offsetY: e.clientY - imageRect2.top - padTop2 - Math.round(frame.y * scale2),
                     };
                   }}
                 >
@@ -1212,14 +1232,22 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   )}
                   <div
                     onMouseDown={(e) => {
-                      const rect = editorRef.current?.getBoundingClientRect();
-                      if (!rect) return;
+                      const imgEl = imageRef.current;
+                      if (!imgEl) return;
+                      const imageRect2 = imgEl.getBoundingClientRect();
+                      const natW2 = imgEl.naturalWidth || imgEl.width;
+                      const natH2 = imgEl.naturalHeight || imgEl.height;
+                      const scale2 = natW2 > 0 && natH2 > 0 ? Math.min(imageRect2.width / natW2, imageRect2.height / natH2) : 1;
+                      const displayedW2 = natW2 * scale2;
+                      const displayedH2 = natH2 * scale2;
+                      const padLeft2 = (imageRect2.width - displayedW2) / 2;
+                      const padTop2 = (imageRect2.height - displayedH2) / 2;
                       e.stopPropagation();
                       e.preventDefault();
                       resizingRef.current = {
                         target: 'qr',
-                        startX: e.clientX - rect.left,
-                        startY: e.clientY - rect.top,
+                        startX: e.clientX - imageRect2.left - padLeft2,
+                        startY: e.clientY - imageRect2.top - padTop2,
                         startFrame: { ...frame },
                       };
                     }}
@@ -1234,11 +1262,17 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const img = imageRef.current!;
               const imageRect = img.getBoundingClientRect();
               const editorRect = editorRef.current!.getBoundingClientRect();
-              const scale = img.naturalWidth > 0 ? imageRect.width / img.naturalWidth : 1;
+              const natW = img.naturalWidth || img.width;
+              const natH = img.naturalHeight || img.height;
+              const scale = natW > 0 && natH > 0 ? Math.min(imageRect.width / natW, imageRect.height / natH) : 1;
+              const displayedW = natW * scale;
+              const displayedH = natH * scale;
+              const padLeft = (imageRect.width - displayedW) / 2;
+              const padTop = (imageRect.height - displayedH) / 2;
               const offsetLeft = Math.round(imageRect.left - editorRect.left);
               const offsetTop = Math.round(imageRect.top - editorRect.top);
-              const left = offsetLeft + Math.round(labelBox.x * scale);
-              const top = offsetTop + Math.round(labelBox.y * scale);
+              const left = offsetLeft + Math.round(padLeft + labelBox.x * scale);
+              const top = offsetTop + Math.round(padTop + labelBox.y * scale);
               const width = Math.round(labelBox.w * scale);
               const height = Math.round(labelBox.h * scale);
               // console.log("🏷️ DEBUG: Position:", { left, top, width, height });
@@ -1262,12 +1296,20 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     zIndex: 10,
                   }}
                   onMouseDown={(e) => {
-                    const imageRect2 = imageRef.current?.getBoundingClientRect();
-                    if (!imageRect2) return;
+                    const imgEl = imageRef.current;
+                    if (!imgEl) return;
+                    const imageRect2 = imgEl.getBoundingClientRect();
+                    const natW2 = imgEl.naturalWidth || imgEl.width;
+                    const natH2 = imgEl.naturalHeight || imgEl.height;
+                    const scale2 = natW2 > 0 && natH2 > 0 ? Math.min(imageRect2.width / natW2, imageRect2.height / natH2) : 1;
+                    const displayedW2 = natW2 * scale2;
+                    const displayedH2 = natH2 * scale2;
+                    const padLeft2 = (imageRect2.width - displayedW2) / 2;
+                    const padTop2 = (imageRect2.height - displayedH2) / 2;
                     draggingRef.current = {
                       type: 'label',
-                      offsetX: e.clientX - imageRect2.left - Math.round(labelBox.x * scale),
-                      offsetY: e.clientY - imageRect2.top - Math.round(labelBox.y * scale),
+                      offsetX: e.clientX - imageRect2.left - padLeft2 - Math.round(labelBox.x * scale2),
+                      offsetY: e.clientY - imageRect2.top - padTop2 - Math.round(labelBox.y * scale2),
                     };
                   }}
                 >
@@ -1288,14 +1330,22 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   />
                   <div
                     onMouseDown={(e) => {
-                      const rect = editorRef.current?.getBoundingClientRect();
-                      if (!rect) return;
+                      const imgEl = imageRef.current;
+                      if (!imgEl) return;
+                      const imageRect2 = imgEl.getBoundingClientRect();
+                      const natW2 = imgEl.naturalWidth || imgEl.width;
+                      const natH2 = imgEl.naturalHeight || imgEl.height;
+                      const scale2 = natW2 > 0 && natH2 > 0 ? Math.min(imageRect2.width / natW2, imageRect2.height / natH2) : 1;
+                      const displayedW2 = natW2 * scale2;
+                      const displayedH2 = natH2 * scale2;
+                      const padLeft2 = (imageRect2.width - displayedW2) / 2;
+                      const padTop2 = (imageRect2.height - displayedH2) / 2;
                       e.stopPropagation();
                       e.preventDefault();
                       resizingRef.current = {
                         target: 'label',
-                        startX: e.clientX - rect.left,
-                        startY: e.clientY - rect.top,
+                        startX: e.clientX - imageRect2.left - padLeft2,
+                        startY: e.clientY - imageRect2.top - padTop2,
                         startFrame: { x: labelBox.x, y: labelBox.y, w: labelBox.w, h: labelBox.h },
                         startText: labelBox.text,
                       };
@@ -1311,7 +1361,13 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const img = imageRef.current!;
               const imageRect = img.getBoundingClientRect();
               const editorRect = editorRef.current!.getBoundingClientRect();
-              const scale = img.naturalWidth > 0 ? imageRect.width / img.naturalWidth : 1;
+              const natW = img.naturalWidth || img.width;
+              const natH = img.naturalHeight || img.height;
+              const scale = natW > 0 && natH > 0 ? Math.min(imageRect.width / natW, imageRect.height / natH) : 1;
+              const displayedW = natW * scale;
+              const displayedH = natH * scale;
+              const padLeft = (imageRect.width - displayedW) / 2;
+              const padTop = (imageRect.height - displayedH) / 2;
               const offsetLeft = Math.round(imageRect.left - editorRect.left);
               const offsetTop = Math.round(imageRect.top - editorRect.top);
               
@@ -1322,10 +1378,10 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     <div
                       style={{
                         position: 'absolute',
-                        left: offsetLeft + Math.round((img.naturalWidth / 2) * scale),
-                        top: offsetTop,
+                        left: offsetLeft + Math.round(padLeft + (natW / 2) * scale),
+                        top: offsetTop + Math.round(padTop),
                         width: '1px',
-                        height: Math.round(img.naturalHeight * scale),
+                        height: Math.round(displayedH),
                         backgroundColor: '#ff6b6b',
                         zIndex: 5,
                         pointerEvents: 'none',
@@ -1337,9 +1393,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     <div
                       style={{
                         position: 'absolute',
-                        left: offsetLeft,
-                        top: offsetTop + Math.round((img.naturalHeight / 2) * scale),
-                        width: Math.round(img.naturalWidth * scale),
+                        left: offsetLeft + Math.round(padLeft),
+                        top: offsetTop + Math.round(padTop + (natH / 2) * scale),
+                        width: Math.round(displayedW),
                         height: '1px',
                         backgroundColor: '#ff6b6b',
                         zIndex: 5,
