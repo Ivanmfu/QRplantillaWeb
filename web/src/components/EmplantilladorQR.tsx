@@ -1084,16 +1084,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       </div>
 
       <div style={styles.actions}>
-        <button type="button" onClick={handleProcess} disabled={processing}>
-          {processing ? "Procesando..." : "Emplantillar y Exportar"}
-        </button>
         <button
           type="button"
-          className="secondary"
           onClick={handleExportZip}
           disabled={processing}
         >
-          Exportar ZIP
+          {processing ? "Procesando..." : "Emplantillar y descargar"}
         </button>
         <button type="button" className="secondary" onClick={handleClear} disabled={processing}>
           Limpiar
