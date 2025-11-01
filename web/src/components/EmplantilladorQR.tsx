@@ -132,6 +132,10 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const [processing, setProcessing] = useState(false);
   const [csvFileName, setCsvFileName] = useState<string | null>(null);
   const [qrFolderName, setQrFolderName] = useState<string | null>(null);
+  // Estados para inputs numéricos "en curso" (permiten cadenas vacías)
+  const [frameInputs, setFrameInputs] = useState<Partial<Record<keyof Frame, string>>>({});
+  // Mantener relación 1:1 en el QR
+  const [keepSquare, setKeepSquare] = useState<boolean>(true);
 
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const qrInputRef = useRef<HTMLInputElement | null>(null);
@@ -494,6 +498,96 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       cancelled = true;
     };
   }, [activeTemplate, previewIndex, qrIndex, workItems]);
+
+  // Cuando el frame cambie por arrastre/resize u otros, limpiamos borradores para que se sincronicen con el valor real
+  useEffect(() => {
+    setFrameInputs({});
+  }, [frame]);
+
+  // Si activamos mantener cuadrado, igualamos alto=ancho con el mejor tamaño posible
+  useEffect(() => {
+    if (!keepSquare || !frame) return;
+    setFrame((prev) => {
+      if (!prev) return prev;
+      const dims = templateDimensions;
+      const widthLimit = dims.width || Math.max(prev.x + prev.w, 1);
+      const heightLimit = dims.height || Math.max(prev.y + prev.h, 1);
+      const maxW = Math.max(8, Math.round(widthLimit - prev.x));
+      const maxH = Math.max(8, Math.round(heightLimit - prev.y));
+      const size = clamp(prev.w, 8, Math.min(maxW, maxH));
+      if (prev.w === size && prev.h === size) return prev;
+      return { ...prev, w: size, h: size };
+    });
+  }, [keepSquare]);
+
+  const updateFrameSquareSize = useCallback((rawSize: number) => {
+    setFrame((prev) => {
+      const baseFrame = prev ?? template.frame;
+      if (!baseFrame) return prev;
+      const dims = templateDimensions;
+      const widthLimit = dims.width || Math.max(baseFrame.x + baseFrame.w, 1);
+      const heightLimit = dims.height || Math.max(baseFrame.y + baseFrame.h, 1);
+      const maxW = Math.max(8, Math.round(widthLimit - baseFrame.x));
+      const maxH = Math.max(8, Math.round(heightLimit - baseFrame.y));
+      const maxSize = Math.min(maxW, maxH);
+      const nextSize = clamp(Math.round(Number.isFinite(rawSize) ? rawSize : 0), 8, maxSize);
+      return { ...baseFrame, w: nextSize, h: nextSize };
+    });
+  }, [template, templateDimensions]);
+
+  // Manejadores para inputs de frame que permiten vacío y aplican clamp en blur
+  const handleFrameInputChange = useCallback((field: keyof Frame) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const v = event.target.value;
+    setFrameInputs((prev) => {
+      const next = { ...prev };
+      next[field] = v;
+      // Si se mantiene cuadrado y se edita ancho/alto, reflejar en el otro input
+      if (keepSquare && (field === 'w' || field === 'h')) {
+        next[field === 'w' ? 'h' : 'w'] = v;
+      }
+      return next;
+    });
+
+    if (v === '') return; // permitir vacío temporalmente
+    const num = Number(v);
+    if (!Number.isFinite(num)) return;
+    if (keepSquare && (field === 'w' || field === 'h')) {
+      updateFrameSquareSize(num);
+    } else {
+      updateFrameField(field, num);
+    }
+  }, [keepSquare, updateFrameField, updateFrameSquareSize]);
+
+  const handleFrameInputBlur = useCallback((field: keyof Frame) => () => {
+    const draft = frameInputs[field];
+    if (draft === undefined) return;
+    if (draft === '') {
+      // Restaurar a valor actual del frame
+      setFrameInputs((prev) => {
+        const n = { ...prev };
+        delete n[field];
+        return n;
+      });
+      return;
+    }
+    const num = Number(draft);
+    if (Number.isFinite(num)) {
+      if (keepSquare && (field === 'w' || field === 'h')) {
+        updateFrameSquareSize(num);
+      } else {
+        updateFrameField(field, num);
+      }
+    }
+    // Limpiar draft para volver a mostrar valor real
+    setFrameInputs((prev) => {
+      const n = { ...prev };
+      delete n[field];
+      if (keepSquare && (field === 'w' || field === 'h')) {
+        delete n[field === 'w' ? 'h' : 'w'];
+      }
+      return n;
+    });
+  }, [frameInputs, keepSquare, updateFrameField, updateFrameSquareSize]);
 
   const handleCsvChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1124,12 +1218,21 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     const baseFrame = prev ?? resizing.startFrame;
                     const maxW = Math.max(8, Math.round(natW - baseFrame.x));
                     const maxH = Math.max(8, Math.round(natH - baseFrame.y));
-                    const nextW = clamp(Math.round(resizing.startFrame.w + dx), 8, maxW);
-                    const nextH = clamp(Math.round(resizing.startFrame.h + dy), 8, maxH);
-                    if (prev && prev.w === nextW && prev.h === nextH) {
-                      return prev;
+                    if (keepSquare) {
+                      const rawW = Math.round(resizing.startFrame.w + dx);
+                      const rawH = Math.round(resizing.startFrame.h + dy);
+                      const rawSize = Math.max(rawW, rawH);
+                      const size = clamp(rawSize, 8, Math.min(maxW, maxH));
+                      if (prev && prev.w === size && prev.h === size) return prev;
+                      return { ...baseFrame, w: size, h: size };
+                    } else {
+                      const nextW = clamp(Math.round(resizing.startFrame.w + dx), 8, maxW);
+                      const nextH = clamp(Math.round(resizing.startFrame.h + dy), 8, maxH);
+                      if (prev && prev.w === nextW && prev.h === nextH) {
+                        return prev;
+                      }
+                      return { ...baseFrame, w: nextW, h: nextH };
                     }
-                    return { ...baseFrame, w: nextW, h: nextH };
                   });
                 } else if (resizing.target === 'label') {
                   setLabelBox((prev) => {
@@ -1417,8 +1520,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 <span style={styles.editorFieldLabel}>X</span>
                 <input
                   type="number"
-                  value={frame ? frame.x : ''}
-                  onChange={handleFrameNumberChange('x')}
+                  value={frameInputs.x ?? (frame ? String(frame.x) : '')}
+                  onChange={handleFrameInputChange('x')}
+                  onBlur={handleFrameInputBlur('x')}
                   min={0}
                   step={1}
                   disabled={!frame}
@@ -1429,8 +1533,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 <span style={styles.editorFieldLabel}>Y</span>
                 <input
                   type="number"
-                  value={frame ? frame.y : ''}
-                  onChange={handleFrameNumberChange('y')}
+                  value={frameInputs.y ?? (frame ? String(frame.y) : '')}
+                  onChange={handleFrameInputChange('y')}
+                  onBlur={handleFrameInputBlur('y')}
                   min={0}
                   step={1}
                   disabled={!frame}
@@ -1441,8 +1546,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 <span style={styles.editorFieldLabel}>Ancho</span>
                 <input
                   type="number"
-                  value={frame ? frame.w : ''}
-                  onChange={handleFrameNumberChange('w')}
+                  value={frameInputs.w ?? (frame ? String(frame.w) : '')}
+                  onChange={handleFrameInputChange('w')}
+                  onBlur={handleFrameInputBlur('w')}
                   min={8}
                   step={1}
                   disabled={!frame}
@@ -1453,13 +1559,24 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 <span style={styles.editorFieldLabel}>Alto</span>
                 <input
                   type="number"
-                  value={frame ? frame.h : ''}
-                  onChange={handleFrameNumberChange('h')}
+                  value={frameInputs.h ?? (frame ? String(frame.h) : '')}
+                  onChange={handleFrameInputChange('h')}
+                  onBlur={handleFrameInputBlur('h')}
                   min={8}
                   step={1}
                   disabled={!frame}
                   style={styles.editorFieldInput}
                 />
+              </label>
+              <label style={{...styles.editorField, flexDirection: 'row', alignItems: 'center', gap: '8px', minWidth: 'auto'}}>
+                <input
+                  type="checkbox"
+                  checked={keepSquare}
+                  onChange={(e) => setKeepSquare(e.target.checked)}
+                  disabled={!frame}
+                  style={{ margin: 0 }}
+                />
+                <span style={styles.editorFieldLabel}>Mantener cuadrado</span>
               </label>
             </div>
 
