@@ -7,7 +7,7 @@ export default defineConfig({
   base: '/QRplantillaWeb/',
   publicDir: 'public',
   build: {
-    outDir: 'dist',
+    outDir: '../dist',
     emptyOutDir: true,
     assetsDir: 'assets',
     rollupOptions: {
