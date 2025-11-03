@@ -37,16 +37,16 @@ jobs:
 
     - name: Verify build output
       run: |
-        echo "=== Listing web/dist directory ==="
-        ls -la web/dist || (echo "web/dist not found" && exit 1)
+        echo "=== Listing dist directory (root) ==="
+        ls -la dist || (echo "dist not found" && exit 1)
         echo "=== Checking index.html ==="
-        head -15 web/dist/index.html || true
+        head -15 dist/index.html || true
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v4
       if: github.ref == 'refs/heads/main'
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./web/dist
+        publish_dir: ./dist
         force_orphan: true
         enable_jekyll: false
