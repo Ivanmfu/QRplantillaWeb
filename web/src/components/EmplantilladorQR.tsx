@@ -12,6 +12,7 @@ import {
   createZipFromBlobs,
   getQRForItem,
   prepareTemplateForItem,
+  exportPrintPDF,
 } from "../lib/qrWorkflow";
 
 type EmplantilladorQRProps = {
@@ -975,6 +976,81 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     }
   }, [workItems, qrIndex, activeTemplate, textColor, isTransparentBackground, fontSize, isBold]);
 
+  // Función para exportar PDF de impresión con marcas de corte
+  const handleExportPrintPDF = useCallback(async () => {
+    if (workItems.length === 0) {
+      setStatus({ type: "error", text: "No hay elementos para exportar." });
+      return;
+    }
+
+    // Inicializar modal
+    setExportModal({
+      isOpen: true,
+      progress: 0,
+      status: 'Preparando PDF de impresión...',
+      canCancel: true,
+      error: undefined
+    });
+
+    try {
+      setExportModal(prev => ({
+        ...prev,
+        progress: 30,
+        status: 'Generando PDF con marcas de corte...'
+      }));
+
+      const renderOptions = {
+        textColor,
+        isTransparentBackground,
+        fontSize,
+        isBold
+      };
+
+      const pdfBlob = await exportPrintPDF(workItems, qrIndex, activeTemplate, renderOptions);
+
+      setExportModal(prev => ({
+        ...prev,
+        progress: 90,
+        status: 'Iniciando descarga...'
+      }));
+
+      // Convertir blob a data URL para descarga
+      const reader = new FileReader();
+      reader.onload = function() {
+        const dataUrl = reader.result as string;
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = "plantilla_qrs_impresion.pdf";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setExportModal(prev => ({
+          ...prev,
+          progress: 100,
+          status: `PDF de impresión generado con ${workItems.length} páginas`
+        }));
+
+        // Cerrar modal después de un breve delay
+        setTimeout(() => {
+          setExportModal(prev => ({ ...prev, isOpen: false }));
+        }, 2000);
+      };
+      reader.readAsDataURL(pdfBlob);
+
+      setStatus({ type: "info", text: `PDF de impresión generado con ${workItems.length} páginas.` });
+
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setExportModal(prev => ({
+        ...prev,
+        error: `Error al generar PDF: ${message}`,
+        canCancel: false
+      }));
+      setStatus({ type: "error", text: `Error al generar PDF: ${message}` });
+    }
+  }, [workItems, qrIndex, activeTemplate, textColor, isTransparentBackground, fontSize, isBold]);
+
   const resultsMap = useMemo(() => {
     const map = new Map<string, ProcessResult>();
     for (const result of results) {
@@ -1090,6 +1166,14 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           disabled={processing}
         >
           {processing ? "Procesando..." : "Emplantillar y descargar"}
+        </button>
+        <button
+          type="button"
+          onClick={handleExportPrintPDF}
+          disabled={processing}
+          style={{ marginLeft: '8px' }}
+        >
+          {processing ? "Procesando..." : "Descargar PDF impresión"}
         </button>
         <button type="button" className="secondary" onClick={handleClear} disabled={processing}>
           Limpiar

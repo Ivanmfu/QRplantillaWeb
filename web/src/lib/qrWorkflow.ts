@@ -544,6 +544,159 @@ export async function createZipFromBlobs(entries: Array<{ nombre: string; blob: 
   return content;
 }
 
+/**
+ * Genera un PDF con marcas de corte y sangrado (3mm) para impresión profesional.
+ * Similar a la función "Download for print" de Canva.
+ */
+export async function exportPrintPDF(
+  items: WorkItem[],
+  qrIndex: Map<string, UploadedQR>,
+  template: TemplateDef,
+  options?: {
+    textColor?: string;
+    isTransparentBackground?: boolean;
+    fontSize?: number;
+    isBold?: boolean;
+  }
+): Promise<Blob> {
+  // Convertir mm a puntos (1mm = 2.83465 pt)
+  const MM_TO_PT = 2.83465;
+  const BLEED_MM = 3; // sangrado de 3mm
+  const CROP_MARK_LENGTH = 20; // longitud de las marcas de corte en puntos
+  const CROP_MARK_OFFSET = 10; // separación de las marcas respecto al área de sangrado
+  
+  const bleedPt = BLEED_MM * MM_TO_PT;
+  
+  // Crear el PDF con el primer canvas para obtener dimensiones
+  const firstTemplateForItem = prepareTemplateForItem(template, items[0]);
+  const firstCanvas = await renderItem(items[0], qrIndex, firstTemplateForItem, options);
+  
+  // Dimensiones del diseño original (sin sangrado)
+  const designWidth = firstCanvas.width;
+  const designHeight = firstCanvas.height;
+  
+  // Dimensiones del documento con sangrado
+  const docWidth = designWidth + (2 * bleedPt);
+  const docHeight = designHeight + (2 * bleedPt);
+  
+  // Dimensiones del documento con espacio para marcas de corte
+  const pageWidth = docWidth + (2 * (CROP_MARK_LENGTH + CROP_MARK_OFFSET));
+  const pageHeight = docHeight + (2 * (CROP_MARK_LENGTH + CROP_MARK_OFFSET));
+  
+  const pdf = new jsPDF({
+    orientation: pageWidth >= pageHeight ? "landscape" : "portrait",
+    unit: "pt",
+    format: [pageWidth, pageHeight],
+  });
+  
+  let isFirstPage = true;
+  
+  for (const item of items) {
+    try {
+      if (!isFirstPage) {
+        pdf.addPage([pageWidth, pageHeight]);
+      }
+      isFirstPage = false;
+      
+      const templateForItem = prepareTemplateForItem(template, item);
+      const canvas = await renderItem(item, qrIndex, templateForItem, options);
+      const dataUrl = canvas.toDataURL("image/png");
+      
+      // Posición del diseño centrado (con sangrado)
+      const imageX = CROP_MARK_LENGTH + CROP_MARK_OFFSET;
+      const imageY = CROP_MARK_LENGTH + CROP_MARK_OFFSET;
+      
+      // Dibujar la imagen con sangrado extendido
+      // Escalar la imagen para cubrir el área de sangrado
+      const scaleX = docWidth / designWidth;
+      const scaleY = docHeight / designHeight;
+      const scaledWidth = designWidth * scaleX;
+      const scaledHeight = designHeight * scaleY;
+      
+      pdf.addImage(
+        dataUrl,
+        "PNG",
+        imageX,
+        imageY,
+        scaledWidth,
+        scaledHeight
+      );
+      
+      // Dibujar marcas de corte
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.5);
+      
+      // Coordenadas del área de corte (sin sangrado)
+      const cropLeft = imageX + bleedPt;
+      const cropRight = imageX + docWidth - bleedPt;
+      const cropTop = imageY + bleedPt;
+      const cropBottom = imageY + docHeight - bleedPt;
+      
+      // Marcas de corte en las 4 esquinas
+      // Esquina superior izquierda
+      pdf.line(
+        cropLeft - CROP_MARK_OFFSET - CROP_MARK_LENGTH,
+        cropTop,
+        cropLeft - CROP_MARK_OFFSET,
+        cropTop
+      ); // horizontal
+      pdf.line(
+        cropLeft,
+        cropTop - CROP_MARK_OFFSET - CROP_MARK_LENGTH,
+        cropLeft,
+        cropTop - CROP_MARK_OFFSET
+      ); // vertical
+      
+      // Esquina superior derecha
+      pdf.line(
+        cropRight + CROP_MARK_OFFSET,
+        cropTop,
+        cropRight + CROP_MARK_OFFSET + CROP_MARK_LENGTH,
+        cropTop
+      ); // horizontal
+      pdf.line(
+        cropRight,
+        cropTop - CROP_MARK_OFFSET - CROP_MARK_LENGTH,
+        cropRight,
+        cropTop - CROP_MARK_OFFSET
+      ); // vertical
+      
+      // Esquina inferior izquierda
+      pdf.line(
+        cropLeft - CROP_MARK_OFFSET - CROP_MARK_LENGTH,
+        cropBottom,
+        cropLeft - CROP_MARK_OFFSET,
+        cropBottom
+      ); // horizontal
+      pdf.line(
+        cropLeft,
+        cropBottom + CROP_MARK_OFFSET,
+        cropLeft,
+        cropBottom + CROP_MARK_OFFSET + CROP_MARK_LENGTH
+      ); // vertical
+      
+      // Esquina inferior derecha
+      pdf.line(
+        cropRight + CROP_MARK_OFFSET,
+        cropBottom,
+        cropRight + CROP_MARK_OFFSET + CROP_MARK_LENGTH,
+        cropBottom
+      ); // horizontal
+      pdf.line(
+        cropRight,
+        cropBottom + CROP_MARK_OFFSET,
+        cropRight,
+        cropBottom + CROP_MARK_OFFSET + CROP_MARK_LENGTH
+      ); // vertical
+      
+    } catch (error) {
+      console.error(`Error procesando item para PDF de impresión:`, error);
+    }
+  }
+  
+  return pdf.output("blob");
+}
+
 function triggerDownload(blob: Blob, nombre: string, formato: "png" | "pdf"): void {
   const extension = formato === "png" ? ".png" : ".pdf";
   
