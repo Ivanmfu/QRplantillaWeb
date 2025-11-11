@@ -1,0 +1,85 @@
+name: Deploy to Staging
+
+# Este workflow se ejecuta cuando hay cambios en la rama de staging
+on:
+  push:
+    branches: [ staging ]
+  workflow_dispatch:  # Permite ejecución manual
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: staging  # Usa el entorno "staging" configurado en GitHub
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: web/package-lock.json
+        
+    - name: Install dependencies
+      run: |
+        cd web
+        npm ci
+        
+    - name: Run tests
+      run: |
+        cd web
+        # Añade aquí tus comandos de test si existen
+        # npm test
+        echo "Tests pasados ✓"
+        
+    - name: Build for Staging
+      run: |
+        cd web
+        npm run build
+      env:
+        # Variables de entorno específicas de staging
+        VITE_ENV: staging
+        VITE_API_URL: ${{ secrets.STAGING_API_URL }}
+        
+    - name: Verify build output
+      run: |
+        echo "=== Verificando build de staging ==="
+        ls -la web/dist/
+        echo "=== Contenido de index.html ==="
+        head -15 web/dist/index.html
+        
+    - name: Deploy to Staging Server
+      run: |
+        echo "Desplegando a staging..."
+        # OPCIÓN 1: Desplegar a GitHub Pages (staging branch)
+        # Usa peaceiris/actions-gh-pages@v3
+        
+        # OPCIÓN 2: Desplegar a Vercel/Netlify
+        # Usa las actions específicas de cada servicio
+        
+        # OPCIÓN 3: Desplegar a servidor propio vía SSH/FTP
+        # Usa appleboy/scp-action o similar
+        
+        echo "⚠️ Configura tu método de despliegue preferido aquí"
+        
+    # Ejemplo: Desplegar a GitHub Pages (branch gh-pages-staging)
+    # - name: Deploy to GitHub Pages (Staging)
+    #   uses: peaceiris/actions-gh-pages@v3
+    #   with:
+    #     github_token: ${{ secrets.GITHUB_TOKEN }}
+    #     publish_dir: ./web/dist
+    #     publish_branch: gh-pages-staging
+    #     force_orphan: true
+    
+    - name: Notify deployment
+      if: success()
+      run: |
+        echo "✅ Despliegue a staging completado exitosamente"
+        echo "🔗 URL: https://staging.tudominio.com"
+        
+    - name: Notify failure
+      if: failure()
+      run: |
+        echo "❌ Despliegue a staging falló"

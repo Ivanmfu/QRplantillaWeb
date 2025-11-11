@@ -7,6 +7,8 @@ Este repositorio contiene **dos entregables mantenidos**:
 
 Al limpiar los prototipos antiguos sólo queda un punto de entrada para cada versión, descrito a continuación para evitar confusiones.
 
+> 📋 **Gestión de Entornos**: Si necesitas duplicar este repositorio para crear entornos separados de staging y producción, consulta la [Guía de Duplicación de Repositorio](./GUIA_DUPLICACION_REPOSITORIO.md).
+
 ## 1. Estructura principal
 
 ```

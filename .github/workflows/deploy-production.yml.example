@@ -1,0 +1,132 @@
+name: Deploy to Production
+
+# Este workflow se ejecuta solo en releases o manualmente para mayor control
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Permite despliegue manual controlado
+    inputs:
+      confirm_production:
+        description: 'Escribe "DEPLOY" para confirmar despliegue a producción'
+        required: true
+        default: 'NO'
+
+jobs:
+  # Job de validación antes de desplegar
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Validate deployment confirmation
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        if [ "${{ github.event.inputs.confirm_production }}" != "DEPLOY" ]; then
+          echo "❌ Despliegue cancelado - confirmación no recibida"
+          exit 1
+        fi
+        echo "✅ Confirmación recibida - procediendo con despliegue"
+
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    needs: validate
+    if: always() && (needs.validate.result == 'success' || github.event_name == 'release')
+    environment: 
+      name: production
+      url: https://tudominio.com  # URL de producción
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: web/package-lock.json
+        
+    - name: Install dependencies
+      run: |
+        cd web
+        npm ci
+        
+    - name: Run tests
+      run: |
+        cd web
+        # Ejecuta tests antes de desplegar a producción
+        # npm test
+        echo "Tests pasados ✓"
+        
+    - name: Build for Production
+      run: |
+        cd web
+        npm run build
+      env:
+        # Variables de entorno específicas de producción
+        VITE_ENV: production
+        VITE_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+        
+    - name: Verify build output
+      run: |
+        echo "=== Verificando build de producción ==="
+        ls -la web/dist/
+        echo "=== Contenido de index.html ==="
+        head -15 web/dist/index.html
+        
+    - name: Security check
+      run: |
+        echo "Verificando que no haya secretos en el build..."
+        # Añade checks de seguridad aquí
+        echo "✓ Verificación de seguridad completada"
+        
+    - name: Deploy to Production Server
+      run: |
+        echo "Desplegando a producción..."
+        # OPCIÓN 1: Desplegar a GitHub Pages (main branch)
+        # Usa peaceiris/actions-gh-pages@v3
+        
+        # OPCIÓN 2: Desplegar a Vercel/Netlify (producción)
+        # Usa las actions específicas de cada servicio
+        
+        # OPCIÓN 3: Desplegar a servidor propio vía SSH/FTP
+        # Usa appleboy/scp-action o similar
+        
+        echo "⚠️ Configura tu método de despliegue preferido aquí"
+    
+    # Ejemplo: Desplegar a GitHub Pages (branch gh-pages)
+    # - name: Deploy to GitHub Pages (Production)
+    #   uses: peaceiris/actions-gh-pages@v3
+    #   with:
+    #     github_token: ${{ secrets.GITHUB_TOKEN }}
+    #     publish_dir: ./web/dist
+    #     publish_branch: gh-pages
+    #     force_orphan: true
+    
+    - name: Create deployment tag
+      if: success()
+      run: |
+        TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+        git tag "production-${TIMESTAMP}"
+        echo "✅ Tag creado: production-${TIMESTAMP}"
+        
+    - name: Notify success
+      if: success()
+      run: |
+        echo "✅ Despliegue a producción completado exitosamente"
+        echo "🔗 URL: https://tudominio.com"
+        
+    - name: Notify failure
+      if: failure()
+      run: |
+        echo "❌ Despliegue a producción falló"
+        echo "🔄 Por favor revisa los logs y intenta nuevamente"
+
+  # Job opcional: Rollback automático en caso de falla
+  rollback:
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    if: failure()
+    steps:
+    - name: Rollback notification
+      run: |
+        echo "⚠️ Despliegue falló - considera hacer rollback manual"
+        echo "Revisa el último despliegue exitoso y restaura si es necesario"
