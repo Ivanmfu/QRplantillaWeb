@@ -111,7 +111,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const [templateBlobUrl, setTemplateBlobUrl] = useState<string | null>(null);
   const [frame, setFrame] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [labelBox, setLabelBox] = useState<LabelBoxShape | null>(null);
-  const [selectedItemIndex, setSelectedItemIndex] = useState<number>(0);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef<DragState | null>(null);
   const [results, setResults] = useState<ProcessResult[]>([]);
@@ -120,6 +119,10 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const [processing, setProcessing] = useState(false);
   const [csvFileName, setCsvFileName] = useState<string | null>(null);
   const [qrFolderName, setQrFolderName] = useState<string | null>(null);
+  // Estados para inputs numéricos "en curso" (permiten cadenas vacías)
+  const [frameInputs, setFrameInputs] = useState<Partial<Record<keyof Frame, string>>>({});
+  // Mantener relación 1:1 en el QR
+  const [keepSquare, setKeepSquare] = useState<boolean>(true);
 
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const qrInputRef = useRef<HTMLInputElement | null>(null);
@@ -274,16 +277,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     }
   }, [labelBox, template]);
 
-  // Actualizar etiqueta cuando cambie el elemento seleccionado
-  useEffect(() => {
-    if (labelBox && workItems.length > 0 && selectedItemIndex < workItems.length) {
-      const selectedItem = workItems[selectedItemIndex];
-      if (selectedItem?.nombreArchivoSalida) {
-        setLabelBox(prev => prev ? { ...prev, text: selectedItem.nombreArchivoSalida } : null);
-      }
-    }
-  }, [selectedItemIndex, workItems, labelBox]);
-
   // No cleanup needed for data URLs
 
   const updateFrameField = useCallback(
@@ -396,7 +389,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         setQrPreviewUrl(null);
         return;
       }
-      const sample = workItems[selectedItemIndex] || workItems[0];
+      const sample = workItems[0];
       try {
         const qrFrame = activeTemplate.frame;
         const size = Math.round(Math.max(qrFrame.w, qrFrame.h));
@@ -409,7 +402,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     }
     gen();
     return () => { mounted = false; };
-  }, [activeTemplate, qrIndex, workItems, selectedItemIndex]);
+  }, [activeTemplate, qrIndex, workItems]);
 
   useEffect(() => {
     let cancelled = false;
@@ -438,6 +431,96 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       cancelled = true;
     };
   }, [activeTemplate, previewIndex, qrIndex, workItems]);
+
+  // Cuando el frame cambie por arrastre/resize u otros, limpiamos borradores para que se sincronicen con el valor real
+  useEffect(() => {
+    setFrameInputs({});
+  }, [frame]);
+
+  // Si activamos mantener cuadrado, igualamos alto=ancho con el mejor tamaño posible
+  useEffect(() => {
+    if (!keepSquare || !frame) return;
+    setFrame((prev) => {
+      if (!prev) return prev;
+      const dims = templateDimensions;
+      const widthLimit = dims.width || Math.max(prev.x + prev.w, 1);
+      const heightLimit = dims.height || Math.max(prev.y + prev.h, 1);
+      const maxW = Math.max(8, Math.round(widthLimit - prev.x));
+      const maxH = Math.max(8, Math.round(heightLimit - prev.y));
+      const size = clamp(prev.w, 8, Math.min(maxW, maxH));
+      if (prev.w === size && prev.h === size) return prev;
+      return { ...prev, w: size, h: size };
+    });
+  }, [keepSquare]);
+
+  const updateFrameSquareSize = useCallback((rawSize: number) => {
+    setFrame((prev) => {
+      const baseFrame = prev ?? template.frame;
+      if (!baseFrame) return prev;
+      const dims = templateDimensions;
+      const widthLimit = dims.width || Math.max(baseFrame.x + baseFrame.w, 1);
+      const heightLimit = dims.height || Math.max(baseFrame.y + baseFrame.h, 1);
+      const maxW = Math.max(8, Math.round(widthLimit - baseFrame.x));
+      const maxH = Math.max(8, Math.round(heightLimit - baseFrame.y));
+      const maxSize = Math.min(maxW, maxH);
+      const nextSize = clamp(Math.round(Number.isFinite(rawSize) ? rawSize : 0), 8, maxSize);
+      return { ...baseFrame, w: nextSize, h: nextSize };
+    });
+  }, [template, templateDimensions]);
+
+  // Manejadores para inputs de frame que permiten vacío y aplican clamp en blur
+  const handleFrameInputChange = useCallback((field: keyof Frame) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const v = event.target.value;
+    setFrameInputs((prev) => {
+      const next = { ...prev };
+      next[field] = v;
+      // Si se mantiene cuadrado y se edita ancho/alto, reflejar en el otro input
+      if (keepSquare && (field === 'w' || field === 'h')) {
+        next[field === 'w' ? 'h' : 'w'] = v;
+      }
+      return next;
+    });
+
+    if (v === '') return; // permitir vacío temporalmente
+    const num = Number(v);
+    if (!Number.isFinite(num)) return;
+    if (keepSquare && (field === 'w' || field === 'h')) {
+      updateFrameSquareSize(num);
+    } else {
+      updateFrameField(field, num);
+    }
+  }, [keepSquare, updateFrameField, updateFrameSquareSize]);
+
+  const handleFrameInputBlur = useCallback((field: keyof Frame) => () => {
+    const draft = frameInputs[field];
+    if (draft === undefined) return;
+    if (draft === '') {
+      // Restaurar a valor actual del frame
+      setFrameInputs((prev) => {
+        const n = { ...prev };
+        delete n[field];
+        return n;
+      });
+      return;
+    }
+    const num = Number(draft);
+    if (Number.isFinite(num)) {
+      if (keepSquare && (field === 'w' || field === 'h')) {
+        updateFrameSquareSize(num);
+      } else {
+        updateFrameField(field, num);
+      }
+    }
+    // Limpiar draft para volver a mostrar valor real
+    setFrameInputs((prev) => {
+      const n = { ...prev };
+      delete n[field];
+      if (keepSquare && (field === 'w' || field === 'h')) {
+        delete n[field === 'w' ? 'h' : 'w'];
+      }
+      return n;
+    });
+  }, [frameInputs, keepSquare, updateFrameField, updateFrameSquareSize]);
 
   const handleCsvChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -596,7 +679,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           y: defaultFrame.y + defaultFrame.h + 8, 
           w: Math.round(defaultFrame.w), 
           h: 40, 
-          text: workItems.length > 0 ? workItems[selectedItemIndex]?.nombreArchivoSalida || 'nombre-salida' : 'nombre-salida'
+          text: 'nombre-salida' 
         });
       };
       
@@ -821,33 +904,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
 
       {editorImageSrc && (
         <div style={styles.templateEditor}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h4 style={{ margin: 0 }}>Editor visual y vista previa</h4>
-            {workItems.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button 
-                  type="button" 
-                  onClick={() => setSelectedItemIndex(Math.max(0, selectedItemIndex - 1))}
-                  disabled={selectedItemIndex === 0}
-                  style={{ padding: '4px 8px', fontSize: '12px' }}
-                >
-                  ← Anterior
-                </button>
-                <span style={{ fontSize: '12px', color: '#666' }}>
-                  {selectedItemIndex + 1} de {workItems.length}
-                  {workItems[selectedItemIndex] && ` - ${workItems[selectedItemIndex].nombreArchivoSalida}`}
-                </span>
-                <button 
-                  type="button" 
-                  onClick={() => setSelectedItemIndex(Math.min(workItems.length - 1, selectedItemIndex + 1))}
-                  disabled={selectedItemIndex >= workItems.length - 1}
-                  style={{ padding: '4px 8px', fontSize: '12px' }}
-                >
-                  Siguiente →
-                </button>
-              </div>
-            )}
-          </div>
+          <h4>Editor visual</h4>
           {templateSizeText && <div style={styles.editorMeta}>Dimensiones: {templateSizeText}</div>}
           <div
             ref={editorRef}
@@ -901,12 +958,21 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     const baseFrame = prev ?? resizing.startFrame;
                     const maxW = Math.max(8, Math.round(img.naturalWidth - baseFrame.x));
                     const maxH = Math.max(8, Math.round(img.naturalHeight - baseFrame.y));
-                    const nextW = clamp(Math.round(resizing.startFrame.w + dx), 8, maxW);
-                    const nextH = clamp(Math.round(resizing.startFrame.h + dy), 8, maxH);
-                    if (prev && prev.w === nextW && prev.h === nextH) {
-                      return prev;
+                    if (keepSquare) {
+                      const rawW = Math.round(resizing.startFrame.w + dx);
+                      const rawH = Math.round(resizing.startFrame.h + dy);
+                      const rawSize = Math.max(rawW, rawH);
+                      const size = clamp(rawSize, 8, Math.min(maxW, maxH));
+                      if (prev && prev.w === size && prev.h === size) return prev;
+                      return { ...baseFrame, w: size, h: size };
+                    } else {
+                      const nextW = clamp(Math.round(resizing.startFrame.w + dx), 8, maxW);
+                      const nextH = clamp(Math.round(resizing.startFrame.h + dy), 8, maxH);
+                      if (prev && prev.w === nextW && prev.h === nextH) {
+                        return prev;
+                      }
+                      return { ...baseFrame, w: nextW, h: nextH };
                     }
-                    return { ...baseFrame, w: nextW, h: nextH };
                   });
                 } else if (resizing.target === 'label') {
                   setLabelBox((prev) => {
@@ -954,11 +1020,17 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const img = imageRef.current!;
               const imageRect = img.getBoundingClientRect();
               const editorRect = editorRef.current!.getBoundingClientRect();
-              const scale = img.naturalWidth > 0 ? imageRect.width / img.naturalWidth : 1;
+              const natW = img.naturalWidth || img.width;
+              const natH = img.naturalHeight || img.height;
+              const scale = natW > 0 && natH > 0 ? Math.min(imageRect.width / natW, imageRect.height / natH) : 1;
+              const displayedW = natW * scale;
+              const displayedH = natH * scale;
+              const padLeft = (imageRect.width - displayedW) / 2;
+              const padTop = (imageRect.height - displayedH) / 2;
               const offsetLeft = Math.round(imageRect.left - editorRect.left);
               const offsetTop = Math.round(imageRect.top - editorRect.top);
-              const left = offsetLeft + Math.round(frame.x * scale);
-              const top = offsetTop + Math.round(frame.y * scale);
+              const left = offsetLeft + Math.round(padLeft + frame.x * scale);
+              const top = offsetTop + Math.round(padTop + frame.y * scale);
               const width = Math.round(frame.w * scale);
               const height = Math.round(frame.h * scale);
               return (
@@ -978,12 +1050,20 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     backgroundColor: 'rgba(255,255,255,0.0)',
                   }}
                   onMouseDown={(e) => {
-                    const imageRect2 = imageRef.current?.getBoundingClientRect();
-                    if (!imageRect2) return;
+                    const imgEl = imageRef.current;
+                    if (!imgEl) return;
+                    const imageRect2 = imgEl.getBoundingClientRect();
+                    const natW2 = imgEl.naturalWidth || imgEl.width;
+                    const natH2 = imgEl.naturalHeight || imgEl.height;
+                    const scale2 = natW2 > 0 && natH2 > 0 ? Math.min(imageRect2.width / natW2, imageRect2.height / natH2) : 1;
+                    const displayedW2 = natW2 * scale2;
+                    const displayedH2 = natH2 * scale2;
+                    const padLeft2 = (imageRect2.width - displayedW2) / 2;
+                    const padTop2 = (imageRect2.height - displayedH2) / 2;
                     draggingRef.current = {
                       type: 'qr',
-                      offsetX: e.clientX - imageRect2.left - Math.round(frame.x * scale),
-                      offsetY: e.clientY - imageRect2.top - Math.round(frame.y * scale),
+                      offsetX: e.clientX - imageRect2.left - padLeft2 - Math.round(frame.x * scale2),
+                      offsetY: e.clientY - imageRect2.top - padTop2 - Math.round(frame.y * scale2),
                     };
                   }}
                 >
@@ -994,14 +1074,22 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   )}
                   <div
                     onMouseDown={(e) => {
-                      const rect = editorRef.current?.getBoundingClientRect();
-                      if (!rect) return;
+                      const imgEl = imageRef.current;
+                      if (!imgEl) return;
+                      const imageRect2 = imgEl.getBoundingClientRect();
+                      const natW2 = imgEl.naturalWidth || imgEl.width;
+                      const natH2 = imgEl.naturalHeight || imgEl.height;
+                      const scale2 = natW2 > 0 && natH2 > 0 ? Math.min(imageRect2.width / natW2, imageRect2.height / natH2) : 1;
+                      const displayedW2 = natW2 * scale2;
+                      const displayedH2 = natH2 * scale2;
+                      const padLeft2 = (imageRect2.width - displayedW2) / 2;
+                      const padTop2 = (imageRect2.height - displayedH2) / 2;
                       e.stopPropagation();
                       e.preventDefault();
                       resizingRef.current = {
                         target: 'qr',
-                        startX: e.clientX - rect.left,
-                        startY: e.clientY - rect.top,
+                        startX: e.clientX - imageRect2.left - padLeft2,
+                        startY: e.clientY - imageRect2.top - padTop2,
                         startFrame: { ...frame },
                       };
                     }}
@@ -1015,11 +1103,17 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const img = imageRef.current!;
               const imageRect = img.getBoundingClientRect();
               const editorRect = editorRef.current!.getBoundingClientRect();
-              const scale = img.naturalWidth > 0 ? imageRect.width / img.naturalWidth : 1;
+              const natW = img.naturalWidth || img.width;
+              const natH = img.naturalHeight || img.height;
+              const scale = natW > 0 && natH > 0 ? Math.min(imageRect.width / natW, imageRect.height / natH) : 1;
+              const displayedW = natW * scale;
+              const displayedH = natH * scale;
+              const padLeft = (imageRect.width - displayedW) / 2;
+              const padTop = (imageRect.height - displayedH) / 2;
               const offsetLeft = Math.round(imageRect.left - editorRect.left);
               const offsetTop = Math.round(imageRect.top - editorRect.top);
-              const left = offsetLeft + Math.round(labelBox.x * scale);
-              const top = offsetTop + Math.round(labelBox.y * scale);
+              const left = offsetLeft + Math.round(padLeft + labelBox.x * scale);
+              const top = offsetTop + Math.round(padTop + labelBox.y * scale);
               const width = Math.round(labelBox.w * scale);
               const height = Math.round(labelBox.h * scale);
               return (
@@ -1040,12 +1134,20 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     cursor: 'move',
                   }}
                   onMouseDown={(e) => {
-                    const imageRect2 = imageRef.current?.getBoundingClientRect();
-                    if (!imageRect2) return;
+                    const imgEl = imageRef.current;
+                    if (!imgEl) return;
+                    const imageRect2 = imgEl.getBoundingClientRect();
+                    const natW2 = imgEl.naturalWidth || imgEl.width;
+                    const natH2 = imgEl.naturalHeight || imgEl.height;
+                    const scale2 = natW2 > 0 && natH2 > 0 ? Math.min(imageRect2.width / natW2, imageRect2.height / natH2) : 1;
+                    const displayedW2 = natW2 * scale2;
+                    const displayedH2 = natH2 * scale2;
+                    const padLeft2 = (imageRect2.width - displayedW2) / 2;
+                    const padTop2 = (imageRect2.height - displayedH2) / 2;
                     draggingRef.current = {
                       type: 'label',
-                      offsetX: e.clientX - imageRect2.left - Math.round(labelBox.x * scale),
-                      offsetY: e.clientY - imageRect2.top - Math.round(labelBox.y * scale),
+                      offsetX: e.clientX - imageRect2.left - padLeft2 - Math.round(labelBox.x * scale2),
+                      offsetY: e.clientY - imageRect2.top - padTop2 - Math.round(labelBox.y * scale2),
                     };
                   }}
                 >
@@ -1056,14 +1158,22 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   />
                   <div
                     onMouseDown={(e) => {
-                      const rect = editorRef.current?.getBoundingClientRect();
-                      if (!rect) return;
+                      const imgEl = imageRef.current;
+                      if (!imgEl) return;
+                      const imageRect2 = imgEl.getBoundingClientRect();
+                      const natW2 = imgEl.naturalWidth || imgEl.width;
+                      const natH2 = imgEl.naturalHeight || imgEl.height;
+                      const scale2 = natW2 > 0 && natH2 > 0 ? Math.min(imageRect2.width / natW2, imageRect2.height / natH2) : 1;
+                      const displayedW2 = natW2 * scale2;
+                      const displayedH2 = natH2 * scale2;
+                      const padLeft2 = (imageRect2.width - displayedW2) / 2;
+                      const padTop2 = (imageRect2.height - displayedH2) / 2;
                       e.stopPropagation();
                       e.preventDefault();
                       resizingRef.current = {
                         target: 'label',
-                        startX: e.clientX - rect.left,
-                        startY: e.clientY - rect.top,
+                        startX: e.clientX - imageRect2.left - padLeft2,
+                        startY: e.clientY - imageRect2.top - padTop2,
                         startFrame: { x: labelBox.x, y: labelBox.y, w: labelBox.w, h: labelBox.h },
                         startText: labelBox.text,
                       };
@@ -1084,8 +1194,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 <span style={styles.editorFieldLabel}>X</span>
                 <input
                   type="number"
-                  value={frame ? frame.x : ''}
-                  onChange={handleFrameNumberChange('x')}
+                  value={frameInputs.x ?? (frame ? String(frame.x) : '')}
+                  onChange={handleFrameInputChange('x')}
+                  onBlur={handleFrameInputBlur('x')}
                   min={0}
                   step={1}
                   disabled={!frame}
@@ -1096,8 +1207,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 <span style={styles.editorFieldLabel}>Y</span>
                 <input
                   type="number"
-                  value={frame ? frame.y : ''}
-                  onChange={handleFrameNumberChange('y')}
+                  value={frameInputs.y ?? (frame ? String(frame.y) : '')}
+                  onChange={handleFrameInputChange('y')}
+                  onBlur={handleFrameInputBlur('y')}
                   min={0}
                   step={1}
                   disabled={!frame}
@@ -1108,8 +1220,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 <span style={styles.editorFieldLabel}>Ancho</span>
                 <input
                   type="number"
-                  value={frame ? frame.w : ''}
-                  onChange={handleFrameNumberChange('w')}
+                  value={frameInputs.w ?? (frame ? String(frame.w) : '')}
+                  onChange={handleFrameInputChange('w')}
+                  onBlur={handleFrameInputBlur('w')}
                   min={8}
                   step={1}
                   disabled={!frame}
@@ -1120,13 +1233,24 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 <span style={styles.editorFieldLabel}>Alto</span>
                 <input
                   type="number"
-                  value={frame ? frame.h : ''}
-                  onChange={handleFrameNumberChange('h')}
+                  value={frameInputs.h ?? (frame ? String(frame.h) : '')}
+                  onChange={handleFrameInputChange('h')}
+                  onBlur={handleFrameInputBlur('h')}
                   min={8}
                   step={1}
                   disabled={!frame}
                   style={styles.editorFieldInput}
                 />
+              </label>
+              <label style={{...styles.editorField, flexDirection: 'row', alignItems: 'center', gap: '8px', minWidth: 'auto'}}>
+                <input
+                  type="checkbox"
+                  checked={keepSquare}
+                  onChange={(e) => setKeepSquare(e.target.checked)}
+                  disabled={!frame}
+                  style={{ margin: 0 }}
+                />
+                <span style={styles.editorFieldLabel}>Mantener cuadrado</span>
               </label>
             </div>
 
@@ -1213,6 +1337,15 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       )}
 
       <div style={styles.content}>
+        <div style={styles.preview}>
+          <h3>Vista previa</h3>
+          {previewUrl ? (
+            <img src={previewUrl} alt="Vista previa del QR" style={styles.previewImage} />
+          ) : (
+            <div style={styles.previewPlaceholder}>Selecciona datos para ver la vista previa</div>
+          )}
+        </div>
+
         <div style={styles.tableWrapper}>
           <h3>Lote</h3>
           <table style={styles.table}>

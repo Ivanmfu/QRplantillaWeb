@@ -11,7 +11,7 @@ const blobRegistry = new Map<string, { stack: string; timestamp: number }>();
 URL.createObjectURL = function(blob: Blob | MediaSource): string {
   const url = originalCreateObjectURL.call(URL, blob);
   
-  // Capturar stack trace (solo para debug)
+  // Capturar stack trace
   const stack = new Error().stack || 'No stack available';
   blobRegistry.set(url, { stack, timestamp: Date.now() });
   
@@ -19,8 +19,12 @@ URL.createObjectURL = function(blob: Blob | MediaSource): string {
   console.log('📍 Stack trace:', stack);
   console.log('📦 Blob type:', blob instanceof Blob ? blob.type : 'MediaSource');
   
-  // NOTA: Bloqueo removido para permitir blob URLs en producción
-  // Las blob URLs son necesarias para el funcionamiento normal de la app
+  // BLOQUEAR creación de blob URLs en PRODUCCIÓN
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    console.error('❌ BLOB URL BLOCKED in production!');
+    // Devolver una imagen 1x1 transparente data URL en su lugar
+    return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  }
   
   return url;
 };
