@@ -707,6 +707,30 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         // Leer SVG como texto
         const svgText = await file.text();
         
+        // Intentar obtener dimensiones del SVG
+        const parser = new DOMParser();
+        const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+        const svgElement = svgDoc.documentElement;
+        
+        // Extraer dimensiones del SVG (width/height o viewBox)
+        let svgWidth = parseFloat(svgElement.getAttribute('width') || '0');
+        let svgHeight = parseFloat(svgElement.getAttribute('height') || '0');
+        
+        if (!svgWidth || !svgHeight) {
+          const viewBox = svgElement.getAttribute('viewBox');
+          if (viewBox) {
+            const parts = viewBox.split(/\s+|,/);
+            svgWidth = parseFloat(parts[2] || '0');
+            svgHeight = parseFloat(parts[3] || '0');
+          }
+        }
+        
+        // Si aún no tenemos dimensiones, usar un tamaño predeterminado
+        const targetWidth = svgWidth || 800;
+        const targetHeight = svgHeight || 800;
+        
+        console.log("📏 SVG dimensions detected:", targetWidth, "x", targetHeight);
+        
         // Crear data URL del SVG
         const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
         
@@ -718,19 +742,20 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           tempImg.src = svgDataUrl;
         });
         
-        console.log("✅ SVG image loaded:", tempImg.naturalWidth, "x", tempImg.naturalHeight);
+        console.log("✅ SVG image loaded, using dimensions:", targetWidth, "x", targetHeight);
         
-        // Rasterizar a PNG
+        // Rasterizar a PNG con las dimensiones especificadas
         const canvas = document.createElement('canvas');
-        canvas.width = tempImg.naturalWidth || 800;
-        canvas.height = tempImg.naturalHeight || 800;
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
         const ctx = canvas.getContext('2d');
         
         if (!ctx) {
           throw new Error('No se pudo crear contexto 2D');
         }
         
-        ctx.drawImage(tempImg, 0, 0);
+        // Dibujar el SVG en el tamaño especificado
+        ctx.drawImage(tempImg, 0, 0, targetWidth, targetHeight);
         pngDataUrl = canvas.toDataURL('image/png');
         console.log('📦 SVG converted to PNG data URL, length:', pngDataUrl.length);
         
