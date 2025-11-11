@@ -696,27 +696,67 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     setStatus({ type: "info", text: "Cargando plantilla..." });
     
     try {
-      console.log("🔄 DIRECT: Loading to canvas without intermediate Image...");
+      console.log("🔄 Loading image file...");
       
-      // Crear bitmap directamente desde el archivo
-      const bitmap = await createImageBitmap(file);
-      console.log("✅ ImageBitmap created:", bitmap.width, "x", bitmap.height);
+      let pngDataUrl: string;
       
-      // Rasterizar inmediatamente a PNG data URL
-      const canvas = document.createElement('canvas');
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) {
-        throw new Error('No se pudo crear contexto 2D');
+      // Para SVG, usar método alternativo más robusto
+      if (file.type === 'image/svg+xml') {
+        console.log("🎨 SVG detected, using FileReader method...");
+        
+        // Leer SVG como texto
+        const svgText = await file.text();
+        
+        // Crear data URL del SVG
+        const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+        
+        // Cargar SVG en una imagen
+        const tempImg = new Image();
+        await new Promise<void>((resolve, reject) => {
+          tempImg.onload = () => resolve();
+          tempImg.onerror = () => reject(new Error('No se pudo cargar el SVG'));
+          tempImg.src = svgDataUrl;
+        });
+        
+        console.log("✅ SVG image loaded:", tempImg.naturalWidth, "x", tempImg.naturalHeight);
+        
+        // Rasterizar a PNG
+        const canvas = document.createElement('canvas');
+        canvas.width = tempImg.naturalWidth || 800;
+        canvas.height = tempImg.naturalHeight || 800;
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          throw new Error('No se pudo crear contexto 2D');
+        }
+        
+        ctx.drawImage(tempImg, 0, 0);
+        pngDataUrl = canvas.toDataURL('image/png');
+        console.log('📦 SVG converted to PNG data URL, length:', pngDataUrl.length);
+        
+      } else {
+        // Para PNG/JPG, usar createImageBitmap (más rápido)
+        console.log("🖼️ Raster image detected, using ImageBitmap...");
+        
+        const bitmap = await createImageBitmap(file);
+        console.log("✅ ImageBitmap created:", bitmap.width, "x", bitmap.height);
+        
+        // Rasterizar inmediatamente a PNG data URL
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          throw new Error('No se pudo crear contexto 2D');
+        }
+        
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close(); // Liberar el bitmap
+        
+        pngDataUrl = canvas.toDataURL('image/png');
+        console.log('📦 PNG data URL created directly, length:', pngDataUrl.length);
       }
-      
-      ctx.drawImage(bitmap, 0, 0);
-      bitmap.close(); // Liberar el bitmap
-      
-      const pngDataUrl = canvas.toDataURL('image/png');
-      console.log('📦 PNG data URL created directly, length:', pngDataUrl.length, 'starts with:', pngDataUrl.substring(0, 30));
       
       // Verificar que es data URL
       if (!pngDataUrl.startsWith('data:')) {
