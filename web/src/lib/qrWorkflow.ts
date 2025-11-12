@@ -341,16 +341,14 @@ export function prepareTemplateForItem(template: TemplateDef, item: Item): Templ
   if (!template.labelBox) {
     return template;
   }
-  const explicit = template.labelText?.trim();
-  if (explicit && explicit.length > 0) {
-    return template;
-  }
+  
+  // Siempre usar el nombreArchivoSalida del item específico para la etiqueta
+  // Esto asegura que cada item tenga su propio texto único
   const nombre = item.nombreArchivoSalida?.trim();
   const fallback = nombre && nombre.length > 0 ? nombre : normalizeNumero(item.numero);
   const prettified = prettifyLabelText(fallback);
-  if (template.labelText === prettified) {
-    return template;
-  }
+  
+  // Siempre crear una nueva plantilla con el texto del item actual
   return { ...template, labelText: prettified };
 }
 
