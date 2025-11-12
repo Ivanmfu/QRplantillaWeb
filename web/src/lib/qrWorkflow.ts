@@ -192,7 +192,7 @@ export async function parseCsvToItems(
   for (const row of result.data) {
     const numeroRaw = (row as any)[possibleNumero] ?? "";
     const enlace = (row as any)[possibleEnlace] ?? "";
-    const nombreArchivoSalida = (row as any)[possibleNombre] ?? "";
+    const nombreArchivoSalidaRaw = (row as any)[possibleNombre] ?? "";
     const numeroTrim = typeof numeroRaw === "string" ? numeroRaw.trim() : `${numeroRaw}`.trim();
     if (!numeroTrim) {
       console.warn("Fila ignorada: falta el campo 'numero'", row);
@@ -201,6 +201,13 @@ export async function parseCsvToItems(
     const isInteger = /^-?\d+$/.test(numeroTrim);
     const hasLeadingZeros = /^-?0\d+/.test(numeroTrim);
     const numeroValue = isInteger && !hasLeadingZeros ? Number(numeroTrim) : numeroTrim;
+    
+    // Si nombreArchivoSalida está vacío, usar el numero como nombre de salida
+    const nombreArchivoSalidaTrim = typeof nombreArchivoSalidaRaw === "string" 
+      ? nombreArchivoSalidaRaw.trim() 
+      : `${nombreArchivoSalidaRaw}`.trim();
+    const nombreArchivoSalida = nombreArchivoSalidaTrim || numeroTrim;
+    
     items.push({
       numero: numeroValue,
       enlace,
