@@ -578,8 +578,8 @@ export async function exportPrintPDF(
 ): Promise<Blob> {
   // Constantes de conversión
   const MM_TO_PT = 2.83465; // 1 mm = 2.83465 puntos
-  const CROP_MARK_LENGTH_MM = 5; // marcas de corte de 5mm
-  const CROP_MARK_OFFSET_MM = 2; // separación de 2mm entre imagen y marcas
+  const CROP_MARK_LENGTH_MM = 2; // marcas de corte de 2mm
+  const CROP_MARK_OFFSET_MM = 1; // separación de 1mm entre imagen y marcas
   
   // Renderizar el primer item para obtener las dimensiones
   const firstTemplateForItem = prepareTemplateForItem(template, items[0]);
@@ -591,7 +591,7 @@ export async function exportPrintPDF(
   const designWidthMM = firstCanvas.width * PX_TO_MM;
   const designHeightMM = firstCanvas.height * PX_TO_MM;
   
-  // Dimensiones totales de página (imagen + espacio para marcas solamente)
+  // Dimensiones totales de página (imagen + 3mm por lado para marcas = 76mm total)
   const pageWidthMM = designWidthMM + (2 * (CROP_MARK_LENGTH_MM + CROP_MARK_OFFSET_MM));
   const pageHeightMM = designHeightMM + (2 * (CROP_MARK_LENGTH_MM + CROP_MARK_OFFSET_MM));
   
