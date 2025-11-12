@@ -578,31 +578,26 @@ export async function exportPrintPDF(
 ): Promise<Blob> {
   // Constantes de conversión
   const MM_TO_PT = 2.83465; // 1 mm = 2.83465 puntos
-  const BLEED_MM = 3; // sangrado de 3mm por cada lado
   const CROP_MARK_LENGTH_MM = 5; // marcas de corte de 5mm
-  const CROP_MARK_OFFSET_MM = 2; // separación de 2mm entre sangrado y marcas
+  const CROP_MARK_OFFSET_MM = 2; // separación de 2mm entre imagen y marcas
   
   // Renderizar el primer item para obtener las dimensiones
   const firstTemplateForItem = prepareTemplateForItem(template, items[0]);
   const firstCanvas = await renderItem(items[0], qrIndex, firstTemplateForItem, options);
   
   // Conversión correcta: 827px = 70mm → 1px = 0.08464mm (aprox. 300 DPI)
+  // La imagen YA incluye el sangrado de 3mm, así que no lo añadimos
   const PX_TO_MM = 70 / 827; // Relación específica para estas plantillas
   const designWidthMM = firstCanvas.width * PX_TO_MM;
   const designHeightMM = firstCanvas.height * PX_TO_MM;
   
-  // Dimensiones con sangrado
-  const trimBoxWidthMM = designWidthMM + (2 * BLEED_MM);
-  const trimBoxHeightMM = designHeightMM + (2 * BLEED_MM);
-  
-  // Dimensiones totales de página (con espacio para marcas)
-  const pageWidthMM = trimBoxWidthMM + (2 * (CROP_MARK_LENGTH_MM + CROP_MARK_OFFSET_MM));
-  const pageHeightMM = trimBoxHeightMM + (2 * (CROP_MARK_LENGTH_MM + CROP_MARK_OFFSET_MM));
+  // Dimensiones totales de página (imagen + espacio para marcas solamente)
+  const pageWidthMM = designWidthMM + (2 * (CROP_MARK_LENGTH_MM + CROP_MARK_OFFSET_MM));
+  const pageHeightMM = designHeightMM + (2 * (CROP_MARK_LENGTH_MM + CROP_MARK_OFFSET_MM));
   
   // Convertir a puntos para jsPDF
   const pageWidthPt = pageWidthMM * MM_TO_PT;
   const pageHeightPt = pageHeightMM * MM_TO_PT;
-  const bleedPt = BLEED_MM * MM_TO_PT;
   const cropMarkLengthPt = CROP_MARK_LENGTH_MM * MM_TO_PT;
   const cropMarkOffsetPt = CROP_MARK_OFFSET_MM * MM_TO_PT;
   const designWidthPt = designWidthMM * MM_TO_PT;
@@ -610,9 +605,8 @@ export async function exportPrintPDF(
   
   console.log('📄 PDF SIZE CALCULATION:');
   console.log('  Image:', firstCanvas.width, 'x', firstCanvas.height, 'px');
-  console.log('  Design:', designWidthMM.toFixed(2), 'x', designHeightMM.toFixed(2), 'mm');
-  console.log('  + Bleed (3mm):', trimBoxWidthMM.toFixed(2), 'x', trimBoxHeightMM.toFixed(2), 'mm');
-  console.log('  + Marks:', pageWidthMM.toFixed(2), 'x', pageHeightMM.toFixed(2), 'mm');
+  console.log('  Design (with bleed):', designWidthMM.toFixed(2), 'x', designHeightMM.toFixed(2), 'mm');
+  console.log('  + Marks (5mm+2mm):', pageWidthMM.toFixed(2), 'x', pageHeightMM.toFixed(2), 'mm');
   
   // Crear el PDF
   const pdf = new jsPDF({
@@ -634,9 +628,9 @@ export async function exportPrintPDF(
       const canvas = await renderItem(item, qrIndex, templateForItem, options);
       const dataUrl = canvas.toDataURL("image/png");
       
-      // Posición de la imagen: espacio para marcas + sangrado
-      const imageX = cropMarkLengthPt + cropMarkOffsetPt + bleedPt;
-      const imageY = cropMarkLengthPt + cropMarkOffsetPt + bleedPt;
+      // Posición de la imagen: centrada con espacio para marcas
+      const imageX = cropMarkLengthPt + cropMarkOffsetPt;
+      const imageY = cropMarkLengthPt + cropMarkOffsetPt;
       
       // Dibujar la imagen en su tamaño real
       pdf.addImage(
