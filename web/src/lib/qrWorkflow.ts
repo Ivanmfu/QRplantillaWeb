@@ -553,7 +553,19 @@ export async function createZipFromBlobs(entries: Array<{ nombre: string; blob: 
 
 /**
  * Genera un PDF con marcas de corte y sangrado (3mm) para impresión profesional.
- * Similar a la función "Download for print" de Canva.
+ * Mantiene la relación exacta píxel-a-milímetro usando conversión estándar de impresión.
+ * 
+ * Conversión estándar de impresión:
+ * - 1 pulgada = 25.4 mm
+ * - 1 pulgada = 72 puntos (pt) en PDF
+ * - Por tanto: 1 mm = 2.83465 pt
+ * - Para imágenes a 72 DPI: 1 píxel = 1 punto = 0.3528 mm
+ * 
+ * @param items - Array de items a exportar
+ * @param qrIndex - Índice de códigos QR subidos
+ * @param template - Definición de la plantilla
+ * @param options - Opciones de renderizado
+ * @returns Blob del PDF generado
  */
 export async function exportPrintPDF(
   items: WorkItem[],
@@ -566,34 +578,37 @@ export async function exportPrintPDF(
     isBold?: boolean;
   }
 ): Promise<Blob> {
-  // Convertir mm a puntos (1mm = 2.83465 pt)
-  const MM_TO_PT = 2.83465;
-  const BLEED_MM = 3; // sangrado de 3mm
-  const CROP_MARK_LENGTH = 20; // longitud de las marcas de corte en puntos
-  const CROP_MARK_OFFSET = 10; // separación de las marcas respecto al área de sangrado
+  // Constantes de conversión
+  const MM_TO_PT = 2.83465; // 1 mm = 2.83465 puntos
+  const PX_TO_PT = 1; // A 72 DPI, 1 píxel = 1 punto
+  const BLEED_MM = 3; // sangrado de 3mm por cada lado
+  const CROP_MARK_LENGTH_PT = 20; // longitud de las marcas de corte
+  const CROP_MARK_OFFSET_PT = 10; // separación entre sangrado y marcas
   
+  // Convertir sangrado a puntos
   const bleedPt = BLEED_MM * MM_TO_PT;
   
-  // Crear el PDF con el primer canvas para obtener dimensiones
+  // Renderizar el primer item para obtener las dimensiones
   const firstTemplateForItem = prepareTemplateForItem(template, items[0]);
   const firstCanvas = await renderItem(items[0], qrIndex, firstTemplateForItem, options);
   
-  // Dimensiones del diseño original (sin sangrado)
-  const designWidth = firstCanvas.width;
-  const designHeight = firstCanvas.height;
+  // Dimensiones de la imagen en píxeles (convertir a puntos con relación 1:1)
+  const imageWidthPt = firstCanvas.width * PX_TO_PT;
+  const imageHeightPt = firstCanvas.height * PX_TO_PT;
   
-  // Dimensiones del documento con sangrado
-  const docWidth = designWidth + (2 * bleedPt);
-  const docHeight = designHeight + (2 * bleedPt);
+  // Dimensiones del área de corte (imagen + sangrado)
+  const trimBoxWidthPt = imageWidthPt + (2 * bleedPt);
+  const trimBoxHeightPt = imageHeightPt + (2 * bleedPt);
   
-  // Dimensiones del documento con espacio para marcas de corte
-  const pageWidth = docWidth + (2 * (CROP_MARK_LENGTH + CROP_MARK_OFFSET));
-  const pageHeight = docHeight + (2 * (CROP_MARK_LENGTH + CROP_MARK_OFFSET));
+  // Dimensiones totales de la página (incluyendo espacio para marcas de corte)
+  const pageWidthPt = trimBoxWidthPt + (2 * (CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT));
+  const pageHeightPt = trimBoxHeightPt + (2 * (CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT));
   
+  // Crear el PDF
   const pdf = new jsPDF({
-    orientation: pageWidth >= pageHeight ? "landscape" : "portrait",
+    orientation: pageWidthPt >= pageHeightPt ? "landscape" : "portrait",
     unit: "pt",
-    format: [pageWidth, pageHeight],
+    format: [pageWidthPt, pageHeightPt],
   });
   
   let isFirstPage = true;
@@ -601,7 +616,7 @@ export async function exportPrintPDF(
   for (const item of items) {
     try {
       if (!isFirstPage) {
-        pdf.addPage([pageWidth, pageHeight]);
+        pdf.addPage([pageWidthPt, pageHeightPt]);
       }
       isFirstPage = false;
       
@@ -609,91 +624,86 @@ export async function exportPrintPDF(
       const canvas = await renderItem(item, qrIndex, templateForItem, options);
       const dataUrl = canvas.toDataURL("image/png");
       
-      // Posición del diseño centrado (con sangrado)
-      const imageX = CROP_MARK_LENGTH + CROP_MARK_OFFSET;
-      const imageY = CROP_MARK_LENGTH + CROP_MARK_OFFSET;
+      // Posición de la imagen (centrada en la página, con espacio para marcas)
+      const imageX = CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT + bleedPt;
+      const imageY = CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT + bleedPt;
       
-      // Dibujar la imagen con sangrado extendido
-      // Escalar la imagen para cubrir el área de sangrado
-      const scaleX = docWidth / designWidth;
-      const scaleY = docHeight / designHeight;
-      const scaledWidth = designWidth * scaleX;
-      const scaledHeight = designHeight * scaleY;
-      
+      // Dibujar la imagen en su tamaño real (píxel = punto)
       pdf.addImage(
         dataUrl,
         "PNG",
         imageX,
         imageY,
-        scaledWidth,
-        scaledHeight
+        imageWidthPt,
+        imageHeightPt
       );
       
       // Dibujar marcas de corte
       pdf.setDrawColor(0, 0, 0);
       pdf.setLineWidth(0.5);
       
-      // Coordenadas del área de corte (sin sangrado)
-      const cropLeft = imageX + bleedPt;
-      const cropRight = imageX + docWidth - bleedPt;
-      const cropTop = imageY + bleedPt;
-      const cropBottom = imageY + docHeight - bleedPt;
+      // Coordenadas del área de corte final (borde de la imagen sin sangrado)
+      // Las marcas indican dónde cortar para eliminar el sangrado
+      const cropLeft = imageX;
+      const cropRight = imageX + imageWidthPt;
+      const cropTop = imageY;
+      const cropBottom = imageY + imageHeightPt;
       
       // Marcas de corte en las 4 esquinas
       // Esquina superior izquierda
       pdf.line(
-        cropLeft - CROP_MARK_OFFSET - CROP_MARK_LENGTH,
+        cropLeft - CROP_MARK_OFFSET_PT - CROP_MARK_LENGTH_PT,
         cropTop,
-        cropLeft - CROP_MARK_OFFSET,
+        cropLeft - CROP_MARK_OFFSET_PT,
         cropTop
       ); // horizontal
       pdf.line(
         cropLeft,
-        cropTop - CROP_MARK_OFFSET - CROP_MARK_LENGTH,
+        cropTop - CROP_MARK_OFFSET_PT - CROP_MARK_LENGTH_PT,
         cropLeft,
-        cropTop - CROP_MARK_OFFSET
+        cropTop - CROP_MARK_OFFSET_PT
       ); // vertical
       
       // Esquina superior derecha
       pdf.line(
-        cropRight + CROP_MARK_OFFSET,
+        cropRight + CROP_MARK_OFFSET_PT,
         cropTop,
-        cropRight + CROP_MARK_OFFSET + CROP_MARK_LENGTH,
+        cropRight + CROP_MARK_OFFSET_PT + CROP_MARK_LENGTH_PT,
         cropTop
       ); // horizontal
       pdf.line(
         cropRight,
-        cropTop - CROP_MARK_OFFSET - CROP_MARK_LENGTH,
+        cropTop - CROP_MARK_OFFSET_PT - CROP_MARK_LENGTH_PT,
         cropRight,
-        cropTop - CROP_MARK_OFFSET
+        cropTop - CROP_MARK_OFFSET_PT
       ); // vertical
       
       // Esquina inferior izquierda
       pdf.line(
-        cropLeft - CROP_MARK_OFFSET - CROP_MARK_LENGTH,
+        cropLeft - CROP_MARK_OFFSET_PT - CROP_MARK_LENGTH_PT,
         cropBottom,
-        cropLeft - CROP_MARK_OFFSET,
+        cropLeft - CROP_MARK_OFFSET_PT,
         cropBottom
       ); // horizontal
       pdf.line(
         cropLeft,
-        cropBottom + CROP_MARK_OFFSET,
+        cropBottom + CROP_MARK_OFFSET_PT,
         cropLeft,
-        cropBottom + CROP_MARK_OFFSET + CROP_MARK_LENGTH
+        cropBottom + CROP_MARK_OFFSET_PT + CROP_MARK_LENGTH_PT
       ); // vertical
       
       // Esquina inferior derecha
       pdf.line(
-        cropRight + CROP_MARK_OFFSET,
+        cropRight + CROP_MARK_OFFSET_PT,
         cropBottom,
-        cropRight + CROP_MARK_OFFSET + CROP_MARK_LENGTH,
+        cropRight + CROP_MARK_OFFSET_PT + CROP_MARK_LENGTH_PT,
         cropBottom
       ); // horizontal
       pdf.line(
         cropRight,
-        cropBottom + CROP_MARK_OFFSET,
+        cropBottom + CROP_MARK_OFFSET_PT,
         cropRight,
-        cropBottom + CROP_MARK_OFFSET + CROP_MARK_LENGTH
+        cropBottom + CROP_MARK_OFFSET_PT + CROP_MARK_LENGTH_PT
       ); // vertical
       
     } catch (error) {
