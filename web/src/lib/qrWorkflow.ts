@@ -586,8 +586,8 @@ export async function exportPrintPDF(
   const firstTemplateForItem = prepareTemplateForItem(template, items[0]);
   const firstCanvas = await renderItem(items[0], qrIndex, firstTemplateForItem, options);
   
-  // Dimensiones de la imagen en mm (asumiendo 72 DPI: 1px = 0.3528mm)
-  const PX_TO_MM = 0.3528;
+  // Conversión correcta: 827px = 70mm → 1px = 0.08464mm (aprox. 300 DPI)
+  const PX_TO_MM = 70 / 827; // Relación específica para estas plantillas
   const designWidthMM = firstCanvas.width * PX_TO_MM;
   const designHeightMM = firstCanvas.height * PX_TO_MM;
   
