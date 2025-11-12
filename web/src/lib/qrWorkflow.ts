@@ -590,15 +590,16 @@ export async function exportPrintPDF(
   const firstTemplateForItem = prepareTemplateForItem(template, items[0]);
   const firstCanvas = await renderItem(items[0], qrIndex, firstTemplateForItem, options);
   
-  // Dimensiones de la imagen en píxeles (convertir a puntos con relación 1:1)
-  const imageWidthPt = firstCanvas.width * PX_TO_PT;
-  const imageHeightPt = firstCanvas.height * PX_TO_PT;
+  // Dimensiones de la imagen renderizada en píxeles (convertir a puntos 1:1)
+  const designWidthPt = firstCanvas.width * PX_TO_PT;
+  const designHeightPt = firstCanvas.height * PX_TO_PT;
   
-  // Dimensiones del área de corte (imagen + sangrado)
-  const trimBoxWidthPt = imageWidthPt + (2 * bleedPt);
-  const trimBoxHeightPt = imageHeightPt + (2 * bleedPt);
+  // La imagen renderizada ES el diseño final
+  // Añadimos sangrado alrededor del diseño
+  const trimBoxWidthPt = designWidthPt + (2 * bleedPt);
+  const trimBoxHeightPt = designHeightPt + (2 * bleedPt);
   
-  // Dimensiones totales de la página (incluyendo espacio para marcas de corte)
+  // Tamaño de página: área con sangrado + espacio para marcas de corte
   const pageWidthPt = trimBoxWidthPt + (2 * (CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT));
   const pageHeightPt = trimBoxHeightPt + (2 * (CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT));
   
@@ -622,18 +623,18 @@ export async function exportPrintPDF(
       const canvas = await renderItem(item, qrIndex, templateForItem, options);
       const dataUrl = canvas.toDataURL("image/png");
       
-      // Posición de la imagen (centrada en la página, con espacio para marcas)
+      // Posición de la imagen: espacio para marcas + sangrado
       const imageX = CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT + bleedPt;
       const imageY = CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT + bleedPt;
       
-      // Dibujar la imagen en su tamaño real (píxel = punto)
+      // Dibujar la imagen en su tamaño real (sin escalar)
       pdf.addImage(
         dataUrl,
         "PNG",
         imageX,
         imageY,
-        imageWidthPt,
-        imageHeightPt
+        designWidthPt,
+        designHeightPt
       );
       
       // Dibujar marcas de corte
@@ -643,9 +644,9 @@ export async function exportPrintPDF(
       // Coordenadas del área de corte final (borde de la imagen sin sangrado)
       // Las marcas indican dónde cortar para eliminar el sangrado
       const cropLeft = imageX;
-      const cropRight = imageX + imageWidthPt;
+      const cropRight = imageX + designWidthPt;
       const cropTop = imageY;
-      const cropBottom = imageY + imageHeightPt;
+      const cropBottom = imageY + designHeightPt;
       
       // Marcas de corte en las 4 esquinas
       // Esquina superior izquierda
