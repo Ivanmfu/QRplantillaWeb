@@ -594,14 +594,28 @@ export async function exportPrintPDF(
   const designWidthPt = firstCanvas.width * PX_TO_PT;
   const designHeightPt = firstCanvas.height * PX_TO_PT;
   
+  console.log('📄 PDF EXPORT DEBUG:');
+  console.log('  Canvas dimensions:', firstCanvas.width, 'x', firstCanvas.height, 'px');
+  console.log('  Design in points:', designWidthPt, 'x', designHeightPt, 'pt');
+  console.log('  Design in mm:', (designWidthPt / MM_TO_PT).toFixed(2), 'x', (designHeightPt / MM_TO_PT).toFixed(2), 'mm');
+  
   // La imagen renderizada ES el diseño final
   // Añadimos sangrado alrededor del diseño
   const trimBoxWidthPt = designWidthPt + (2 * bleedPt);
   const trimBoxHeightPt = designHeightPt + (2 * bleedPt);
   
+  console.log('  Bleed:', BLEED_MM, 'mm =', bleedPt.toFixed(2), 'pt');
+  console.log('  Trimbox (with bleed):', trimBoxWidthPt.toFixed(2), 'x', trimBoxHeightPt.toFixed(2), 'pt');
+  console.log('  Trimbox in mm:', (trimBoxWidthPt / MM_TO_PT).toFixed(2), 'x', (trimBoxHeightPt / MM_TO_PT).toFixed(2), 'mm');
+  
   // Tamaño de página: área con sangrado + espacio para marcas de corte
   const pageWidthPt = trimBoxWidthPt + (2 * (CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT));
   const pageHeightPt = trimBoxHeightPt + (2 * (CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT));
+  
+  console.log('  Crop marks space:', (CROP_MARK_LENGTH_PT + CROP_MARK_OFFSET_PT), 'pt per side');
+  console.log('  Final page size:', pageWidthPt.toFixed(2), 'x', pageHeightPt.toFixed(2), 'pt');
+  console.log('  Final page in mm:', (pageWidthPt / MM_TO_PT).toFixed(2), 'x', (pageHeightPt / MM_TO_PT).toFixed(2), 'mm');
+  console.log('📄 END DEBUG\n');
   
   // Crear el PDF
   const pdf = new jsPDF({
