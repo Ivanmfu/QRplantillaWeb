@@ -9,3 +9,26 @@ venv/
 .env
 # macOS artifacts
 .DS_Store
+
+# Logs and PID files
+*.log
+*.pid
+
+# Exports folder
+web/public/exports/
+
+# Backup folders
+web/QRplantillaWeb*/
+
+# Test files (if not needed in repo)
+# web/tests/
+
+# Feature docs (optional)
+FEATURES_CHRONOLOGICAL.md
+
+# Scripts folder (if not needed)
+web/scripts/
+
+# Temporary SVG files
+web/public/*.svg
+web/public/README.txt
