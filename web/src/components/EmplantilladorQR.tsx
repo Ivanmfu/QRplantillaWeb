@@ -94,6 +94,18 @@ function getTemplateDimensions(template: TemplateDef): { width: number; height: 
   };
 }
 
+// Size presets for PDF export
+type SizePreset = 'original' | 'tarjeta' | 'a6' | 'a5' | 'custom';
+type SizeUnit = 'px' | 'cm';
+
+const SIZE_PRESETS: Record<SizePreset, { label: string; width: number; height: number }> = {
+  original: { label: 'Tamaño original', width: 0, height: 0 },
+  tarjeta: { label: 'Tarjeta 5×9 cm', width: 5, height: 9 },
+  a6: { label: 'A6 (10.5×14.8 cm)', width: 10.5, height: 14.8 },
+  a5: { label: 'A5 (14.8×21 cm)', width: 14.8, height: 21 },
+  custom: { label: 'Personalizado', width: 0, height: 0 },
+};
+
 export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   template,
   exportFormat,
@@ -110,13 +122,43 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [templateImage, setTemplateImage] = useState<HTMLImageElement | null>(null);
   const [templateBlobUrl, setTemplateBlobUrl] = useState<string | null>(null);
-  const [frame, setFrame] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [frame, setFrame] = useState<{ x: number; y: number; w: number; h: number } | null>(() => {
+    const saved = localStorage.getItem('qr_frame');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [labelBox, setLabelBox] = useState<LabelBoxShape | null>(null);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number>(0);
-  const [fontSize, setFontSize] = useState<number>(14);
-  const [isBold, setIsBold] = useState<boolean>(false);
-  const [textColor, setTextColor] = useState<string>('#000000');
-  const [isTransparentBackground, setIsTransparentBackground] = useState<boolean>(false);
+  const [fontSize, setFontSize] = useState<number>(() => {
+    const saved = localStorage.getItem('qr_fontSize');
+    return saved ? parseInt(saved) : 14;
+  });
+  const [isBold, setIsBold] = useState<boolean>(() => {
+    return localStorage.getItem('qr_isBold') === 'true';
+  });
+  const [isItalic, setIsItalic] = useState<boolean>(() => {
+    return localStorage.getItem('qr_isItalic') === 'true';
+  });
+  const [fontFamily, setFontFamily] = useState<string>(() => {
+    return localStorage.getItem('qr_fontFamily') || 'Inter';
+  });
+  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>(() => {
+    const saved = localStorage.getItem('qr_textAlign') as 'left' | 'center' | 'right';
+    return saved || 'center';
+  });
+  const [lineHeight, setLineHeight] = useState<number>(() => {
+    const saved = localStorage.getItem('qr_lineHeight');
+    return saved ? parseFloat(saved) : 1.2;
+  });
+  const [letterSpacing, setLetterSpacing] = useState<number>(() => {
+    const saved = localStorage.getItem('qr_letterSpacing');
+    return saved ? parseFloat(saved) : 0;
+  });
+  const [textColor, setTextColor] = useState<string>(() => {
+    return localStorage.getItem('qr_textColor') || '#000000';
+  });
+  const [isTransparentBackground, setIsTransparentBackground] = useState<boolean>(() => {
+    return localStorage.getItem('qr_transparentBg') === 'true';
+  });
   const [showGuides, setShowGuides] = useState<{ horizontal: boolean; vertical: boolean }>({ horizontal: false, vertical: false });
   const [exportModal, setExportModal] = useState<{
     isOpen: boolean;
@@ -137,6 +179,102 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
   const [frameInputs, setFrameInputs] = useState<Partial<Record<keyof Frame, string>>>({});
   // Mantener relación 1:1 en el QR
   const [keepSquare, setKeepSquare] = useState<boolean>(true);
+  // Drag & Drop state
+  const [dragOver, setDragOver] = useState<{ csv: boolean; qr: boolean; template: boolean }>({ csv: false, qr: false, template: false });
+  // Export options states
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const [selectedExportFormat, setSelectedExportFormat] = useState<'png' | 'pdf' | 'svg'>('pdf');
+  const [sizeUnit, setSizeUnit] = useState<SizeUnit>('cm');
+  const [sizePreset, setSizePreset] = useState<SizePreset>('original');
+  const [customWidthCm, setCustomWidthCm] = useState(7);
+  const [customHeightCm, setCustomHeightCm] = useState(10);
+  const [showCropMarks, setShowCropMarks] = useState(false);
+  const [bleedMm, setBleedMm] = useState(3);
+
+  // Save to localStorage when values change
+  useEffect(() => {
+    if (frame) localStorage.setItem('qr_frame', JSON.stringify(frame));
+  }, [frame]);
+  useEffect(() => { localStorage.setItem('qr_fontSize', fontSize.toString()); }, [fontSize]);
+  useEffect(() => { localStorage.setItem('qr_isBold', isBold.toString()); }, [isBold]);
+  useEffect(() => { localStorage.setItem('qr_isItalic', isItalic.toString()); }, [isItalic]);
+  useEffect(() => { localStorage.setItem('qr_fontFamily', fontFamily); }, [fontFamily]);
+  useEffect(() => { localStorage.setItem('qr_textAlign', textAlign); }, [textAlign]);
+  useEffect(() => { localStorage.setItem('qr_lineHeight', lineHeight.toString()); }, [lineHeight]);
+  useEffect(() => { localStorage.setItem('qr_letterSpacing', letterSpacing.toString()); }, [letterSpacing]);
+  useEffect(() => { localStorage.setItem('qr_textColor', textColor); }, [textColor]);
+  useEffect(() => { localStorage.setItem('qr_transparentBg', isTransparentBackground.toString()); }, [isTransparentBackground]);
+
+  const resetTextDefaults = useCallback(() => {
+    setFontSize(14);
+    setIsBold(false);
+    setIsItalic(false);
+    setFontFamily('Inter');
+    setTextAlign('center');
+    setLineHeight(1.2);
+    setLetterSpacing(0);
+    setTextColor('#000000');
+    setIsTransparentBackground(false);
+  }, []);
+
+  // Keyboard shortcuts for QR manipulation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle if we have a frame and no input is focused
+      if (!frame) return;
+      const activeEl = document.activeElement;
+      if (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement || activeEl instanceof HTMLSelectElement) {
+        return;
+      }
+
+      const step = e.shiftKey ? 10 : 1;
+      let handled = false;
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          setFrame(prev => prev ? { ...prev, x: Math.max(0, prev.x - step) } : prev);
+          handled = true;
+          break;
+        case 'ArrowRight':
+          setFrame(prev => prev ? { ...prev, x: prev.x + step } : prev);
+          handled = true;
+          break;
+        case 'ArrowUp':
+          setFrame(prev => prev ? { ...prev, y: Math.max(0, prev.y - step) } : prev);
+          handled = true;
+          break;
+        case 'ArrowDown':
+          setFrame(prev => prev ? { ...prev, y: prev.y + step } : prev);
+          handled = true;
+          break;
+        case '+':
+        case '=':
+          setFrame(prev => {
+            if (!prev) return prev;
+            const newSize = Math.min(prev.w + step, 500);
+            return keepSquare ? { ...prev, w: newSize, h: newSize } : { ...prev, w: newSize };
+          });
+          handled = true;
+          break;
+        case '-':
+        case '_':
+          setFrame(prev => {
+            if (!prev) return prev;
+            const newSize = Math.max(prev.w - step, 20);
+            return keepSquare ? { ...prev, w: newSize, h: newSize } : { ...prev, w: newSize };
+          });
+          handled = true;
+          break;
+      }
+
+      if (handled) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [frame, keepSquare]);
 
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const qrInputRef = useRef<HTMLInputElement | null>(null);
@@ -153,21 +291,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     const baseImage = templateImage ?? template.baseImage;
     const size = templateImage
       ? {
-          width: templateImage.naturalWidth || templateImage.width,
-          height: templateImage.naturalHeight || templateImage.height,
-        }
+        width: templateImage.naturalWidth || templateImage.width,
+        height: templateImage.naturalHeight || templateImage.height,
+      }
       : template.size;
-    
-    console.log("📐 ACTIVETEMPLATE SIZE CALCULATION:");
-    console.log("📐 templateImage exists:", !!templateImage);
-    console.log("📐 templateImage dimensions:", templateImage ? { 
-      naturalWidth: templateImage.naturalWidth, 
-      naturalHeight: templateImage.naturalHeight, 
-      width: templateImage.width, 
-      height: templateImage.height 
-    } : 'none');
-    console.log("📐 calculated size:", size);
-    console.log("📐 template.size (default):", template.size);
+
+
     const frameToUse = frame ?? template.frame;
     const labelFrame = labelBox
       ? { x: labelBox.x, y: labelBox.y, w: labelBox.w, h: labelBox.h }
@@ -190,10 +319,8 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       next.labelText = labelText;
     }
 
-    console.log("🔍 ACTIVE TEMPLATE CREATED:");
-    console.log("🔍 frameToUse:", frameToUse);
-    console.log("🔍 labelFrame:", labelFrame);
-    
+
+
     return next;
   }, [exportFormat, frame, labelBox, template, templateImage]);
 
@@ -205,18 +332,11 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     return `${templateDimensions.width} × ${templateDimensions.height}px`;
   }, [templateDimensions]);
   const editorImageSrc = useMemo(() => {
-    console.log('🔍 editorImageSrc recalculating...');
-    console.log('  templateBlobUrl:', templateBlobUrl ? `${templateBlobUrl.substring(0, 30)}... (${templateBlobUrl.length} chars)` : 'null');
-    console.log('  templateImage:', templateImage ? `${templateImage.width}x${templateImage.height}, src=${templateImage.src?.substring(0, 50)}` : 'null');
-    console.log('  template.baseImage type:', template.baseImage.constructor.name);
-    
     // 1) Prioriza el data URL ya calculado
     if (templateBlobUrl) {
       if (!templateBlobUrl.startsWith('data:')) {
-        console.error('❌ CRITICAL: templateBlobUrl is NOT a data URL!', templateBlobUrl.substring(0, 100));
         return undefined;
       }
-      console.log("✅ Editor image: using rasterized data URL, length:", templateBlobUrl.length);
       return templateBlobUrl;
     }
 
@@ -227,7 +347,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         console.error('❌ CRITICAL: templateImage.src is blob URL!', templateImage.src);
         return undefined;
       }
-      
+
       try {
         const w = templateImage.naturalWidth || templateImage.width;
         const h = templateImage.naturalHeight || templateImage.height;
@@ -238,7 +358,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           if (ctx) {
             ctx.drawImage(templateImage, 0, 0, w, h);
             const url = c.toDataURL('image/png');
-            console.log('✅ Editor image: rasterized templateImage to data URL, length:', url.length);
             return url;
           }
         }
@@ -255,7 +374,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         console.error('❌ CRITICAL: base HTMLImageElement.src is blob URL!', base.src);
         return undefined;
       }
-      
+
       try {
         const w = base.naturalWidth || base.width;
         const h = base.naturalHeight || base.height;
@@ -266,7 +385,6 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           if (ctx) {
             ctx.drawImage(base, 0, 0, w, h);
             const url = c.toDataURL('image/png');
-            console.log('✅ Editor image: rasterized base HTMLImageElement to data URL, length:', url.length);
             return url;
           }
         }
@@ -278,72 +396,48 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     if (base instanceof HTMLCanvasElement) {
       try {
         const dataUrl = base.toDataURL('image/png');
-        console.log('✅ Editor image: using base canvas data URL, length:', dataUrl.length);
         return dataUrl;
       } catch (e) {
         console.error('❌ Editor image: failed to convert canvas to data URL', e);
       }
     }
 
-    console.log('⚠️ Editor image: no valid image source');
     return undefined;
   }, [templateBlobUrl, templateImage, template]);
 
   useEffect(() => {
     // Solo usar template.frame si no hay plantilla personalizada y no hay frame personalizado
     if (!frame && template.frame && !templateImage) {
-      console.log("⚠️ OVERRIDING frame with template.frame:", template.frame);
       setFrame({ ...template.frame });
     }
   }, [frame, template, templateImage]);
 
   useEffect(() => {
-    if (!labelBox) {
-      const fromTemplate = cloneTemplateLabelBox(template);
-      if (fromTemplate) {
-        setLabelBox(fromTemplate);
+    // Only initialize labelBox once when component mounts or template changes
+    setLabelBox((prev) => {
+      if (!prev) {
+        const fromTemplate = cloneTemplateLabelBox(template);
+        return fromTemplate || null;
       }
-    } else if (!labelBox.text && template.labelText) {
-      setLabelBox({ ...labelBox, text: template.labelText });
-    }
-  }, [labelBox, template]);
+      if (!prev.text && template.labelText) {
+        return { ...prev, text: template.labelText };
+      }
+      return prev;
+    });
+  }, [template]);
 
   // Actualizar etiqueta cuando cambie el elemento seleccionado o inicializar si no existe
   useEffect(() => {
     if (workItems.length > 0 && selectedItemIndex < workItems.length) {
       const selectedItem = workItems[selectedItemIndex];
-      
-      if (labelBox) {
-        // Si labelBox existe, solo actualizar el texto
-        if (selectedItem?.nombreArchivoSalida) {
-          setLabelBox(prev => prev ? { ...prev, text: selectedItem.nombreArchivoSalida } : null);
-        }
-      } else if (frame) {
-        // Si labelBox no existe pero tenemos frame, inicializar labelBox
-        const imgHeight = templateImage?.naturalHeight || 600;
-        const editorHeight = Math.min(800, imgHeight);
-        const availableSpace = editorHeight - (frame.y + frame.h) - 50;
-        
-        let labelY;
-        if (availableSpace > 40) {
-          // Hay espacio debajo del QR
-          labelY = frame.y + frame.h + 8;
-        } else {
-          // No hay espacio debajo, colocar arriba del QR
-          labelY = Math.max(8, frame.y - 48);
-        }
-        
-        const newLabelBox = {
-          x: frame.x,
-          y: labelY,
-          w: frame.w,
-          h: 40,
-          text: selectedItem?.nombreArchivoSalida || 'nombre-salida'
-        };
-        setLabelBox(newLabelBox);
+
+      // Only update text, not create new labelBox (that's handled elsewhere)
+      if (selectedItem?.nombreArchivoSalida) {
+        setLabelBox(prev => prev ? { ...prev, text: selectedItem.nombreArchivoSalida } : null);
       }
     }
-  }, [selectedItemIndex, workItems, labelBox, frame]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItemIndex, workItems]);
 
   // No cleanup needed for data URLs
 
@@ -683,39 +777,39 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       setTemplateBlobUrl(null);
       return;
     }
-    
+
     console.log("📁 File selected:", file.name, file.type, file.size);
-    
+
     // Validar tipo de archivo
     if (!file.type.match(/^image\/(png|jpeg|jpg|svg\+xml)$/)) {
       console.log("❌ Invalid file type:", file.type);
       setStatus({ type: "error", text: "Por favor, sube una imagen válida (PNG, JPG, SVG)" });
       return;
     }
-    
+
     setStatus({ type: "info", text: "Cargando plantilla..." });
-    
+
     try {
       console.log("🔄 Loading image file...");
-      
+
       let pngDataUrl: string;
-      
+
       // Para SVG, usar método alternativo más robusto
       if (file.type === 'image/svg+xml') {
         console.log("🎨 SVG detected, using FileReader method...");
-        
+
         // Leer SVG como texto
         const svgText = await file.text();
-        
+
         // Intentar obtener dimensiones del SVG
         const parser = new DOMParser();
         const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
         const svgElement = svgDoc.documentElement;
-        
+
         // Extraer dimensiones del SVG (width/height o viewBox)
         let svgWidth = parseFloat(svgElement.getAttribute('width') || '0');
         let svgHeight = parseFloat(svgElement.getAttribute('height') || '0');
-        
+
         if (!svgWidth || !svgHeight) {
           const viewBox = svgElement.getAttribute('viewBox');
           if (viewBox) {
@@ -724,16 +818,16 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             svgHeight = parseFloat(parts[3] || '0');
           }
         }
-        
+
         // Si aún no tenemos dimensiones, usar un tamaño predeterminado
         const targetWidth = svgWidth || 800;
         const targetHeight = svgHeight || 800;
-        
+
         console.log("📏 SVG dimensions detected:", targetWidth, "x", targetHeight);
-        
+
         // Crear data URL del SVG
         const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
-        
+
         // Cargar SVG en una imagen
         const tempImg = new Image();
         await new Promise<void>((resolve, reject) => {
@@ -741,84 +835,88 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           tempImg.onerror = () => reject(new Error('No se pudo cargar el SVG'));
           tempImg.src = svgDataUrl;
         });
-        
+
         console.log("✅ SVG image loaded, using dimensions:", targetWidth, "x", targetHeight);
-        
+
         // Rasterizar a PNG con las dimensiones especificadas
         const canvas = document.createElement('canvas');
         canvas.width = targetWidth;
         canvas.height = targetHeight;
         const ctx = canvas.getContext('2d');
-        
+
         if (!ctx) {
           throw new Error('No se pudo crear contexto 2D');
         }
-        
+
+        // Fill with white background first (SVGs may have transparent areas)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+
         // Dibujar el SVG en el tamaño especificado
         ctx.drawImage(tempImg, 0, 0, targetWidth, targetHeight);
         pngDataUrl = canvas.toDataURL('image/png');
         console.log('📦 SVG converted to PNG data URL, length:', pngDataUrl.length);
-        
+
       } else {
         // Para PNG/JPG, usar createImageBitmap (más rápido)
         console.log("🖼️ Raster image detected, using ImageBitmap...");
-        
+
         const bitmap = await createImageBitmap(file);
         console.log("✅ ImageBitmap created:", bitmap.width, "x", bitmap.height);
-        
+
         // Rasterizar inmediatamente a PNG data URL
         const canvas = document.createElement('canvas');
         canvas.width = bitmap.width;
         canvas.height = bitmap.height;
         const ctx = canvas.getContext('2d');
-        
+
         if (!ctx) {
           throw new Error('No se pudo crear contexto 2D');
         }
-        
+
         ctx.drawImage(bitmap, 0, 0);
         bitmap.close(); // Liberar el bitmap
-        
+
         pngDataUrl = canvas.toDataURL('image/png');
         console.log('📦 PNG data URL created directly, length:', pngDataUrl.length);
       }
-      
+
       // Verificar que es data URL
       if (!pngDataUrl.startsWith('data:')) {
         console.error('❌ Generated URL is not a data URL!', pngDataUrl.substring(0, 50));
         setStatus({ type: "error", text: "Error interno: URL no válida generada" });
         return;
       }
-      
+
       // Crear imagen desde el data URL para obtener dimensiones
       const img = new Image();
       img.onload = () => {
         console.log("✅ Final image loaded:", img.naturalWidth, "x", img.naturalHeight);
         setTemplateImage(img);
         setStatus({ type: "info", text: `Plantilla cargada: ${img.naturalWidth}×${img.naturalHeight}px` });
-        
+
         // set default frame TRULY centered
         const qrSize = Math.round(Math.min(img.naturalWidth, img.naturalHeight) * 0.3); // 30% del lado menor
-        const defaultFrame = { 
+        const defaultFrame = {
           x: Math.round((img.naturalWidth - qrSize) / 2),   // Centrado horizontalmente
           y: Math.round((img.naturalHeight - qrSize) / 2),  // Centrado verticalmente
-          w: qrSize, 
-          h: qrSize 
+          w: qrSize,
+          h: qrSize
         };
-        
+
         console.log("🎯 SETTING CENTERED FRAME:", defaultFrame);
         console.log("🎯 Image dimensions:", { width: img.naturalWidth, height: img.naturalHeight });
-        console.log("🎯 QR should be centered at:", { 
-          centerX: defaultFrame.x + defaultFrame.w/2, 
-          centerY: defaultFrame.y + defaultFrame.h/2 
+        console.log("🎯 QR should be centered at:", {
+          centerX: defaultFrame.x + defaultFrame.w / 2,
+          centerY: defaultFrame.y + defaultFrame.h / 2
         });
         setFrame(defaultFrame);
-        
+
         // Asegurar que el labelBox esté dentro del área visible
         // Calcular el espacio disponible considerando la escala del editor
         const editorHeight = Math.min(800, img.naturalHeight);
         const availableSpace = editorHeight - (defaultFrame.y + defaultFrame.h) - 50;
-        
+
         let labelY;
         if (availableSpace > 40) {
           // Hay espacio debajo del QR
@@ -827,30 +925,30 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           // No hay espacio debajo, colocar arriba del QR
           labelY = Math.max(8, defaultFrame.y - 48);
         }
-        
-        const defaultLabelBox = { 
-          x: defaultFrame.x, 
+
+        const defaultLabelBox = {
+          x: defaultFrame.x,
           y: labelY,
-          w: Math.round(defaultFrame.w), 
-          h: 40, 
+          w: Math.round(defaultFrame.w),
+          h: 40,
           text: workItems.length > 0 ? workItems[selectedItemIndex]?.nombreArchivoSalida || 'nombre-salida' : 'nombre-salida'
         };
-        
+
         setLabelBox(defaultLabelBox);
       };
-      
+
       img.onerror = (error) => {
         console.error("❌ Error loading final image:", error);
         setStatus({ type: "error", text: "Error al cargar la plantilla procesada" });
       };
-      
+
       // Guardar el data URL ANTES de cargar la imagen
       setTemplateBlobUrl(pngDataUrl);
       console.log("✅ templateBlobUrl set to data URL");
-      
+
       // Ahora cargar la imagen
       img.src = pngDataUrl;
-      
+
     } catch (error) {
       console.error("❌ Error processing template file:", error);
       setStatus({ type: "error", text: "Error al procesar el archivo de plantilla: " + (error instanceof Error ? error.message : String(error)) });
@@ -866,13 +964,13 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     setQrFolderName(null);
     setPreviewUrl(null);
     setStatus(null);
-    
+
     // Limpiar template (no cleanup needed for data URLs)
     setTemplateImage(null);
     setTemplateBlobUrl(null);
     setFrame(null);
     setLabelBox(null);
-    
+
     if (csvInputRef.current) {
       csvInputRef.current.value = "";
     }
@@ -893,7 +991,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         textColor,
         isTransparentBackground,
         fontSize,
-        isBold
+        isBold,
+        isItalic,
+        fontFamily,
+        textAlign,
+        lineHeight,
+        letterSpacing
       };
       const processResults = await processItems(workItems, qrIndex, activeTemplate, renderOptions);
       setResults(processResults);
@@ -916,7 +1019,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
     console.log('workItems:', workItems);
     console.log('qrIndex size:', qrIndex.size);
     console.log('activeTemplate:', activeTemplate);
-    
+
     if (workItems.length === 0) {
       setStatus({ type: "error", text: "No hay elementos para exportar." });
       return;
@@ -933,7 +1036,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
 
     try {
       const total = workItems.length;
-      
+
       // Procesar items con progreso
       setExportModal(prev => ({
         ...prev,
@@ -942,27 +1045,32 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       }));
 
       console.log('=== FINAL EXPORT DEBUG ===');
-      console.log('Template image natural size:', templateImage ? { 
-        width: templateImage.naturalWidth, 
-        height: templateImage.naturalHeight 
+      console.log('Template image natural size:', templateImage ? {
+        width: templateImage.naturalWidth,
+        height: templateImage.naturalHeight
       } : 'No custom template');
       console.log('Template size setting:', activeTemplate.size);
       console.log('Final activeTemplate.frame:', activeTemplate.frame);
       console.log('Final activeTemplate.labelBox:', activeTemplate.labelBox);
       console.log('==========================')
-      
+
       let entries: Array<{ nombre: string; blob: Blob }> = [];
-      
+
       try {
         const renderOptions = {
           textColor,
           isTransparentBackground,
           fontSize,
-          isBold
+          isBold,
+          isItalic,
+          fontFamily,
+          textAlign,
+          lineHeight,
+          letterSpacing
         };
         entries = await processItemsToBlobs(workItems, qrIndex, activeTemplate, renderOptions);
         console.log('processItemsToBlobs result:', entries);
-        
+
         if (entries.length === 0) {
           console.error('No entries generated - checking why...');
           console.log('workItems detailed:', workItems.map(item => ({
@@ -971,7 +1079,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             nombreArchivoSalida: item.nombreArchivoSalida,
             origenQR: item.origenQR
           })));
-          
+
           setExportModal(prev => ({
             ...prev,
             error: 'No se generaron archivos para el ZIP. Verifica que los datos sean correctos.',
@@ -997,16 +1105,16 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       }));
 
       const zipBlob = await createZipFromBlobs(entries);
-      
+
       setExportModal(prev => ({
         ...prev,
         progress: 95,
         status: 'Iniciando descarga...'
       }));
-      
+
       // Convertir blob a data URL para evitar problemas de revocación
       const reader = new FileReader();
-      reader.onload = function() {
+      reader.onload = function () {
         const dataUrl = reader.result as string;
         const a = document.createElement("a");
         a.href = dataUrl;
@@ -1014,7 +1122,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        
+
         setExportModal(prev => ({
           ...prev,
           progress: 100,
@@ -1027,9 +1135,9 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         }, 2000);
       };
       reader.readAsDataURL(zipBlob);
-      
+
       setStatus({ type: "info", text: `ZIP generado con ${entries.length} archivos.` });
-      
+
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setExportModal(prev => ({
@@ -1068,7 +1176,12 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         textColor,
         isTransparentBackground,
         fontSize,
-        isBold
+        isBold,
+        isItalic,
+        fontFamily,
+        textAlign,
+        lineHeight,
+        letterSpacing
       };
 
       const pdfBlob = await exportPrintPDF(workItems, qrIndex, activeTemplate, renderOptions);
@@ -1081,7 +1194,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
 
       // Convertir blob a data URL para descarga
       const reader = new FileReader();
-      reader.onload = function() {
+      reader.onload = function () {
         const dataUrl = reader.result as string;
         const a = document.createElement("a");
         a.href = dataUrl;
@@ -1173,7 +1286,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             className="secondary"
             onClick={() => {
               const csv = createTemplateCsv(csvHeaders.length ? csvHeaders : undefined);
-              
+
               // Usar data URL en lugar de blob URL
               const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
               const a = document.createElement("a");
@@ -1189,7 +1302,21 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         </div>
       </div>
       <div style={styles.dropzones}>
-        <label className="dropzone-card" style={styles.dropzone}>
+        <label
+          className="dropzone-card"
+          style={{
+            ...styles.dropzone,
+            ...(dragOver.csv && {
+              borderColor: '#6366f1',
+              boxShadow: '0 0 20px rgba(99, 102, 241, 0.4)',
+              transform: 'scale(1.02)'
+            })
+          }}
+          onDragEnter={(e) => { e.preventDefault(); setDragOver(prev => ({ ...prev, csv: true })); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragOver(prev => ({ ...prev, csv: false })); }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => setDragOver(prev => ({ ...prev, csv: false }))}
+        >
           <strong>CSV (opcional)</strong>
           <span style={styles.dropzoneHint}>{csvFileName || "Arrastra o selecciona un archivo CSV"}</span>
           <input
@@ -1200,7 +1327,21 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             onChange={handleCsvChange}
           />
         </label>
-        <label className="dropzone-card" style={styles.dropzone}>
+        <label
+          className="dropzone-card"
+          style={{
+            ...styles.dropzone,
+            ...(dragOver.qr && {
+              borderColor: '#6366f1',
+              boxShadow: '0 0 20px rgba(99, 102, 241, 0.4)',
+              transform: 'scale(1.02)'
+            })
+          }}
+          onDragEnter={(e) => { e.preventDefault(); setDragOver(prev => ({ ...prev, qr: true })); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragOver(prev => ({ ...prev, qr: false })); }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => setDragOver(prev => ({ ...prev, qr: false }))}
+        >
           <strong>Carpeta de QRs (opcional)</strong>
           <span style={styles.dropzoneHint}>{qrFolderName || "Arrastra una carpeta o selecciona archivos .png/.svg"}</span>
           <input
@@ -1212,7 +1353,21 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             onChange={handleQrChange}
           />
         </label>
-        <label className="dropzone-card" style={styles.dropzone}>
+        <label
+          className="dropzone-card"
+          style={{
+            ...styles.dropzone,
+            ...(dragOver.template && {
+              borderColor: '#6366f1',
+              boxShadow: '0 0 20px rgba(99, 102, 241, 0.4)',
+              transform: 'scale(1.02)'
+            })
+          }}
+          onDragEnter={(e) => { e.preventDefault(); setDragOver(prev => ({ ...prev, template: true })); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragOver(prev => ({ ...prev, template: false })); }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => setDragOver(prev => ({ ...prev, template: false }))}
+        >
           <strong>Plantilla base (opcional)</strong>
           <span style={styles.dropzoneHint}>{templateImage ? `Cargada: ${templateImage.width}×${templateImage.height}` : "Sube una imagen (.png/.jpg)"}</span>
           <input
@@ -1224,25 +1379,154 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         </label>
       </div>
 
-      <div style={styles.actions}>
-        <button
-          type="button"
-          onClick={handleExportZip}
-          disabled={processing}
-        >
-          {processing ? "Procesando..." : "Emplantillar y descargar"}
-        </button>
-        <button
-          type="button"
-          onClick={handleExportPrintPDF}
-          disabled={processing}
-          style={{ marginLeft: '8px' }}
-        >
-          {processing ? "Procesando..." : "Descargar PDF impresión"}
-        </button>
-        <button type="button" className="secondary" onClick={handleClear} disabled={processing}>
-          Limpiar
-        </button>
+      {/* Export Options Panel */}
+      <div style={{
+        background: 'rgba(30, 41, 59, 0.95)',
+        borderRadius: '16px',
+        padding: '16px 20px',
+        marginBottom: '16px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>Formato:</label>
+            <select
+              value={selectedExportFormat}
+              onChange={(e) => {
+                setSelectedExportFormat(e.target.value as any);
+                setShowExportOptions(true);
+              }}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                background: 'rgba(15, 23, 42, 0.6)',
+                color: '#f1f5f9',
+                fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              <option value="png">PNG (raster)</option>
+              <option value="pdf">PDF (impresión)</option>
+              <option value="svg">SVG (vectorial)</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowExportOptions(!showExportOptions)}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              background: 'transparent',
+              border: '1px solid rgba(148, 163, 184, 0.3)',
+              color: '#94a3b8',
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            ⚙️ Opciones {showExportOptions ? '▲' : '▼'}
+          </button>
+
+          <div style={{ flex: 1 }} />
+
+          <button
+            type="button"
+            onClick={handleExportZip}
+            disabled={processing}
+            style={{
+              padding: '10px 24px',
+              borderRadius: 10,
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              border: 'none',
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: processing ? 'not-allowed' : 'pointer',
+              opacity: processing ? 0.6 : 1,
+              boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
+            }}
+          >
+            {processing ? "Procesando..." : "📥 Descargar"}
+          </button>
+
+          <button type="button" className="secondary" onClick={handleClear} disabled={processing} style={{ padding: '10px 16px', borderRadius: 10 }}>
+            Limpiar
+          </button>
+        </div>
+
+        {showExportOptions && (
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                Tamaño de salida
+              </label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                {(Object.keys(SIZE_PRESETS) as SizePreset[]).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSizePreset(key)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      border: sizePreset === key ? '2px solid #6366f1' : '1px solid rgba(148, 163, 184, 0.3)',
+                      background: sizePreset === key ? 'rgba(99, 102, 241, 0.15)' : 'rgba(15, 23, 42, 0.4)',
+                      color: sizePreset === key ? '#a5b4fc' : '#94a3b8',
+                      fontSize: 13,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {SIZE_PRESETS[key].label}
+                  </button>
+                ))}
+              </div>
+
+              {sizePreset === 'custom' && (
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', background: 'rgba(15, 23, 42, 0.4)', padding: '12px 16px', borderRadius: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: 12, color: '#94a3b8' }}>Unidad:</label>
+                    <select value={sizeUnit} onChange={(e) => setSizeUnit(e.target.value as SizeUnit)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(148, 163, 184, 0.3)', background: 'rgba(15, 23, 42, 0.6)', color: '#f1f5f9', fontSize: 13 }}>
+                      <option value="cm">cm</option>
+                      <option value="px">px</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: 12, color: '#94a3b8' }}>Ancho:</label>
+                    <input type="number" value={customWidthCm} onChange={(e) => setCustomWidthCm(parseFloat(e.target.value) || 0)} step={sizeUnit === 'cm' ? 0.5 : 10} min={0} style={{ width: '70px', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(148, 163, 184, 0.3)', background: 'rgba(15, 23, 42, 0.6)', color: '#f1f5f9', fontSize: 13 }} />
+                  </div>
+                  <span style={{ color: '#64748b' }}>×</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: 12, color: '#94a3b8' }}>Alto:</label>
+                    <input type="number" value={customHeightCm} onChange={(e) => setCustomHeightCm(parseFloat(e.target.value) || 0)} step={sizeUnit === 'cm' ? 0.5 : 10} min={0} style={{ width: '70px', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(148, 163, 184, 0.3)', background: 'rgba(15, 23, 42, 0.6)', color: '#f1f5f9', fontSize: 13 }} />
+                  </div>
+                  <span style={{ fontSize: 12, color: '#64748b' }}>{sizeUnit}</span>
+                </div>
+              )}
+            </div>
+
+            {selectedExportFormat === 'pdf' && (
+              <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '12px 16px', borderRadius: 10 }}>
+                <label style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500, display: 'block', marginBottom: '10px' }}>
+                  Opciones de impresión
+                </label>
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={showCropMarks} onChange={(e) => setShowCropMarks(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#6366f1' }} />
+                    <span style={{ fontSize: 13, color: '#e2e8f0' }}>Marcas de corte y sangrado</span>
+                  </label>
+                  {showCropMarks && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <label style={{ fontSize: 12, color: '#94a3b8' }}>Sangrado:</label>
+                      <input type="number" value={bleedMm} onChange={(e) => setBleedMm(parseFloat(e.target.value) || 0)} step={0.5} min={0} max={10} style={{ width: '50px', padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(148, 163, 184, 0.3)', background: 'rgba(15, 23, 42, 0.6)', color: '#f1f5f9', fontSize: 12 }} />
+                      <span style={{ fontSize: 12, color: '#64748b' }}>mm</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {editorImageSrc && (
@@ -1251,8 +1535,8 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
             <h4 style={{ margin: 0 }}>Editor visual y vista previa</h4>
             {workItems.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setSelectedItemIndex(Math.max(0, selectedItemIndex - 1))}
                   disabled={selectedItemIndex === 0}
                   style={{ padding: '4px 8px', fontSize: '12px' }}
@@ -1263,8 +1547,8 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   {selectedItemIndex + 1} de {workItems.length}
                   {workItems[selectedItemIndex] && ` - ${workItems[selectedItemIndex].nombreArchivoSalida}`}
                 </span>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setSelectedItemIndex(Math.min(workItems.length - 1, selectedItemIndex + 1))}
                   disabled={selectedItemIndex >= workItems.length - 1}
                   style={{ padding: '4px 8px', fontSize: '12px' }}
@@ -1309,19 +1593,19 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 const newNatY = Math.round(newDisplayedY / scale);
                 const finalX = Math.max(0, Math.min(newNatX, Math.round(natW - frame.w)));
                 const finalY = Math.max(0, Math.min(newNatY, Math.round(natH - frame.h)));
-                
+
                 // Calcular si está centrado (con tolerancia de 5px)
                 const centerX = finalX + frame.w / 2;
                 const centerY = finalY + frame.h / 2;
                 const canvasCenterX = natW / 2;
                 const canvasCenterY = natH / 2;
                 const tolerance = 5;
-                
+
                 const isHorizontallyCentered = Math.abs(centerX - canvasCenterX) <= tolerance;
                 const isVerticallyCentered = Math.abs(centerY - canvasCenterY) <= tolerance;
-                
+
                 setShowGuides({ horizontal: isHorizontallyCentered, vertical: isVerticallyCentered });
-                
+
                 setFrame({
                   ...frame,
                   x: finalX,
@@ -1335,19 +1619,19 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 const newNatY = Math.round(newDisplayedY / scale);
                 const finalX = Math.max(0, Math.min(newNatX, Math.round(natW - labelBox.w)));
                 const finalY = Math.max(0, Math.min(newNatY, Math.round(natH - labelBox.h)));
-                
+
                 // Calcular si está centrado (con tolerancia de 5px)
                 const centerX = finalX + labelBox.w / 2;
                 const centerY = finalY + labelBox.h / 2;
                 const canvasCenterX = natW / 2;
                 const canvasCenterY = natH / 2;
                 const tolerance = 5;
-                
+
                 const isHorizontallyCentered = Math.abs(centerX - canvasCenterX) <= tolerance;
                 const isVerticallyCentered = Math.abs(centerY - canvasCenterY) <= tolerance;
-                
+
                 setShowGuides({ horizontal: isHorizontallyCentered, vertical: isVerticallyCentered });
-                
+
                 setLabelBox({
                   ...labelBox,
                   x: finalX,
@@ -1524,7 +1808,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const width = Math.round(labelBox.w * scale);
               const height = Math.round(labelBox.h * scale);
               // console.log("🏷️ DEBUG: Position:", { left, top, width, height });
-              
+
               return (
                 <div
                   style={{
@@ -1562,14 +1846,17 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   }}
                 >
                   <input
-                    style={{ 
-                      width: '100%', 
-                      border: 'none', 
-                      outline: 'none', 
-                      textAlign: 'center',
+                    style={{
+                      width: '100%',
+                      border: 'none',
+                      outline: 'none',
+                      textAlign: textAlign,
                       fontSize: `${fontSize}px`,
                       fontWeight: isBold ? 'bold' : 'normal',
-                      fontFamily: 'Arial, sans-serif',
+                      fontStyle: isItalic ? 'italic' : 'normal',
+                      fontFamily: fontFamily,
+                      letterSpacing: `${letterSpacing}px`,
+                      lineHeight: lineHeight,
                       color: textColor,
                       backgroundColor: 'transparent'
                     }}
@@ -1603,7 +1890,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 </div>
               );
             })()}
-            
+
             {/* Guías de centrado */}
             {imageRef.current && (showGuides.horizontal || showGuides.vertical) && (() => {
               const img = imageRef.current!;
@@ -1618,7 +1905,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
               const padTop = (imageRect.height - displayedH) / 2;
               const offsetLeft = Math.round(imageRect.left - editorRect.left);
               const offsetTop = Math.round(imageRect.top - editorRect.top);
-              
+
               return (
                 <>
                   {/* Guía horizontal (línea vertical) */}
@@ -1713,7 +2000,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   style={styles.editorFieldInput}
                 />
               </label>
-              <label style={{...styles.editorField, flexDirection: 'row', alignItems: 'center', gap: '8px', minWidth: 'auto'}}>
+              <label style={{ ...styles.editorField, flexDirection: 'row', alignItems: 'center', gap: '8px', minWidth: 'auto' }}>
                 <input
                   type="checkbox"
                   checked={keepSquare}
@@ -1776,6 +2063,22 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 />
               </label>
               <label style={styles.editorField}>
+                <span style={styles.editorFieldLabel}>Fuente</span>
+                <select
+                  value={fontFamily}
+                  onChange={(e) => setFontFamily(e.target.value)}
+                  disabled={!labelBox}
+                  style={{ ...styles.editorFieldInput, minWidth: '110px' }}
+                >
+                  <option value="Inter">Inter</option>
+                  <option value="Roboto">Roboto</option>
+                  <option value="Montserrat">Montserrat</option>
+                  <option value="Open Sans">Open Sans</option>
+                  <option value="Playfair Display">Playfair Display</option>
+                  <option value="Arial">Arial</option>
+                </select>
+              </label>
+              <label style={styles.editorField}>
                 <span style={styles.editorFieldLabel}>Tamaño</span>
                 <input
                   type="number"
@@ -1788,16 +2091,102 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   style={styles.editorFieldInput}
                 />
               </label>
-              <label style={{...styles.editorField, flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
-                <input
-                  type="checkbox"
-                  checked={isBold}
-                  onChange={(e) => setIsBold(e.target.checked)}
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsBold(!isBold)}
                   disabled={!labelBox}
-                  style={{ margin: 0 }}
-                />
-                <span style={styles.editorFieldLabel}>Negrita</span>
-              </label>
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    border: isBold ? '2px solid #6366f1' : '1px solid rgba(148, 163, 184, 0.3)',
+                    background: isBold ? 'rgba(99, 102, 241, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                    color: isBold ? '#a5b4fc' : '#94a3b8',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: labelBox ? 'pointer' : 'not-allowed',
+                    opacity: labelBox ? 1 : 0.5,
+                  }}
+                  title="Negrita"
+                >
+                  B
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsItalic(!isItalic)}
+                  disabled={!labelBox}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    border: isItalic ? '2px solid #6366f1' : '1px solid rgba(148, 163, 184, 0.3)',
+                    background: isItalic ? 'rgba(99, 102, 241, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                    color: isItalic ? '#a5b4fc' : '#94a3b8',
+                    fontStyle: 'italic',
+                    fontSize: 14,
+                    cursor: labelBox ? 'pointer' : 'not-allowed',
+                    opacity: labelBox ? 1 : 0.5,
+                  }}
+                  title="Cursiva"
+                >
+                  I
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setTextAlign('left')}
+                  disabled={!labelBox}
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '6px 0 0 6px',
+                    border: textAlign === 'left' ? '2px solid #6366f1' : '1px solid rgba(148, 163, 184, 0.3)',
+                    background: textAlign === 'left' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                    color: textAlign === 'left' ? '#a5b4fc' : '#94a3b8',
+                    fontSize: 12,
+                    cursor: labelBox ? 'pointer' : 'not-allowed',
+                    opacity: labelBox ? 1 : 0.5,
+                  }}
+                  title="Alinear izquierda"
+                >
+                  ⬅
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTextAlign('center')}
+                  disabled={!labelBox}
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: 0,
+                    border: textAlign === 'center' ? '2px solid #6366f1' : '1px solid rgba(148, 163, 184, 0.3)',
+                    background: textAlign === 'center' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                    color: textAlign === 'center' ? '#a5b4fc' : '#94a3b8',
+                    fontSize: 12,
+                    cursor: labelBox ? 'pointer' : 'not-allowed',
+                    opacity: labelBox ? 1 : 0.5,
+                  }}
+                  title="Centrar"
+                >
+                  ⬛
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTextAlign('right')}
+                  disabled={!labelBox}
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '0 6px 6px 0',
+                    border: textAlign === 'right' ? '2px solid #6366f1' : '1px solid rgba(148, 163, 184, 0.3)',
+                    background: textAlign === 'right' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                    color: textAlign === 'right' ? '#a5b4fc' : '#94a3b8',
+                    fontSize: 12,
+                    cursor: labelBox ? 'pointer' : 'not-allowed',
+                    opacity: labelBox ? 1 : 0.5,
+                  }}
+                  title="Alinear derecha"
+                >
+                  ➡
+                </button>
+              </div>
               <label style={styles.editorField}>
                 <span style={styles.editorFieldLabel}>Color</span>
                 <input
@@ -1808,7 +2197,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   style={{ width: '40px', height: '30px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                 />
               </label>
-              <label style={{...styles.editorField, flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
+              <label style={{ ...styles.editorField, flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
                 <input
                   type="checkbox"
                   checked={isTransparentBackground}
@@ -1818,6 +2207,52 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 />
                 <span style={styles.editorFieldLabel}>Fondo transparente</span>
               </label>
+              <label style={styles.editorField}>
+                <span style={styles.editorFieldLabel}>Interlineado</span>
+                <select
+                  value={lineHeight}
+                  onChange={(e) => setLineHeight(parseFloat(e.target.value))}
+                  disabled={!labelBox}
+                  style={styles.editorFieldInput}
+                >
+                  <option value={1}>1.0</option>
+                  <option value={1.2}>1.2</option>
+                  <option value={1.5}>1.5</option>
+                  <option value={2}>2.0</option>
+                </select>
+              </label>
+              <label style={styles.editorField}>
+                <span style={styles.editorFieldLabel}>Espaciado</span>
+                <select
+                  value={letterSpacing}
+                  onChange={(e) => setLetterSpacing(parseFloat(e.target.value))}
+                  disabled={!labelBox}
+                  style={styles.editorFieldInput}
+                >
+                  <option value={-1}>Apretado</option>
+                  <option value={0}>Normal</option>
+                  <option value={1}>Amplio</option>
+                  <option value={2}>Muy amplio</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={resetTextDefaults}
+                disabled={!labelBox}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(148, 163, 184, 0.3)',
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  color: '#fca5a5',
+                  fontSize: 12,
+                  cursor: labelBox ? 'pointer' : 'not-allowed',
+                  opacity: labelBox ? 1 : 0.5,
+                }}
+                title="Restaurar valores por defecto"
+              >
+                ↺ Reset
+              </button>
             </div>
           </div>
         </div>
@@ -1894,10 +2329,10 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
           </table>
         </div>
       </div>
-      
+
       {/* Modal de progreso de exportación */}
       {exportModal.isOpen && (
-        <div 
+        <div
           style={{
             position: 'fixed',
             top: 0,
@@ -1938,7 +2373,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 {exportModal.status}
               </p>
             </div>
-            
+
             {!exportModal.error && (
               <div style={{ marginBottom: '24px' }}>
                 <div style={{
@@ -1956,17 +2391,17 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                     borderRadius: '4px',
                   }} />
                 </div>
-                <div style={{ 
-                  marginTop: '8px', 
-                  fontSize: '12px', 
+                <div style={{
+                  marginTop: '8px',
+                  fontSize: '12px',
                   color: 'var(--color-muted)',
-                  textAlign: 'center' 
+                  textAlign: 'center'
                 }}>
                   {exportModal.progress}%
                 </div>
               </div>
             )}
-            
+
             {exportModal.error && (
               <div style={{
                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -1980,7 +2415,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                 </p>
               </div>
             )}
-            
+
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               {exportModal.canCancel && !exportModal.error && (
                 <button
@@ -1999,7 +2434,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
                   Cancelar
                 </button>
               )}
-              
+
               {(exportModal.error || exportModal.progress === 100) && (
                 <button
                   type="button"
@@ -2029,7 +2464,7 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     display: "flex",
     flexDirection: "column",
-    gap: "1.75rem",
+    gap: "1.5rem",
     fontFamily: "var(--font-sans)",
   },
   dropzones: {
@@ -2039,27 +2474,27 @@ const styles: Record<string, React.CSSProperties> = {
   },
   dropzone: {
     flex: "1 1 260px",
-    border: "1px solid var(--border-glass)",
-    borderRadius: "20px",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    borderRadius: "16px",
     padding: "1.5rem",
     position: "relative",
-    minHeight: "140px",
+    minHeight: "130px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
-    background: "var(--surface-glass)",
+    background: "rgba(30, 41, 59, 0.7)",
     color: "var(--color-foreground)",
-    backdropFilter: "blur(24px)",
-    boxShadow: "var(--shadow-soft)",
-    transition: "border-color 0.35s ease, box-shadow 0.35s ease",
+    backdropFilter: "blur(20px)",
+    boxShadow: "0 8px 32px -8px rgba(0, 0, 0, 0.3)",
+    transition: "all 0.3s ease",
   },
   dropzoneHint: {
-    marginTop: "0.65rem",
-    fontSize: "0.9rem",
-    color: "var(--color-subtle)",
-    lineHeight: 1.45,
+    marginTop: "0.5rem",
+    fontSize: "0.85rem",
+    color: "#94a3b8",
+    lineHeight: 1.5,
   },
   input: {
     position: "absolute",
@@ -2074,19 +2509,19 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
   },
   templateEditor: {
-    background: "rgba(15, 23, 42, 0.45)",
-    borderRadius: "24px",
-    border: "1px solid var(--border-glass)",
+    background: "rgba(30, 41, 59, 0.85)",
+    borderRadius: "16px",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
     padding: "1.5rem",
     display: "flex",
     flexDirection: "column",
     gap: "1rem",
-    boxShadow: "var(--shadow-soft)",
-    backdropFilter: "blur(24px)",
+    boxShadow: "0 8px 32px -8px rgba(0, 0, 0, 0.3)",
+    backdropFilter: "blur(20px)",
   },
   editorMeta: {
     fontSize: "0.85rem",
-    color: "var(--color-muted)",
+    color: "#94a3b8",
   },
   editorControls: {
     display: "flex",
@@ -2102,73 +2537,74 @@ const styles: Record<string, React.CSSProperties> = {
   },
   editorGroupTitle: {
     fontWeight: 600,
-    fontSize: "0.95rem",
+    fontSize: "0.9rem",
+    color: "#e2e8f0",
     letterSpacing: "0.01em",
   },
   editorField: {
     display: "flex",
     flexDirection: "column",
-    gap: "0.3rem",
-    minWidth: "90px",
+    gap: "0.25rem",
+    minWidth: "85px",
   },
   editorFieldLabel: {
-    fontSize: "0.8rem",
-    color: "var(--color-muted)",
-    letterSpacing: "0.01em",
+    fontSize: "0.75rem",
+    color: "#94a3b8",
+    fontWeight: 500,
   },
   editorFieldInput: {
     width: "100%",
-    padding: "0.35rem 0.6rem",
-    border: "1px solid var(--border-subtle)",
-    borderRadius: "10px",
-    fontSize: "0.9rem",
-    background: "rgba(15, 23, 42, 0.45)",
-    color: "var(--color-foreground)",
+    padding: "0.4rem 0.6rem",
+    border: "1px solid rgba(148, 163, 184, 0.3)",
+    borderRadius: "8px",
+    fontSize: "0.85rem",
+    background: "rgba(15, 23, 42, 0.6)",
+    color: "#f1f5f9",
   },
   status: {
-    padding: "0.9rem 1.25rem",
-    borderRadius: "14px",
-    backgroundColor: "rgba(15, 23, 42, 0.55)",
-    border: "1px solid rgba(255, 255, 255, 0.2)",
-    boxShadow: "var(--shadow-soft)",
+    padding: "0.85rem 1.25rem",
+    borderRadius: "12px",
+    backgroundColor: "rgba(30, 41, 59, 0.9)",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    boxShadow: "0 4px 16px -4px rgba(0, 0, 0, 0.2)",
   },
   content: {
     display: "flex",
     flexWrap: "wrap",
-    gap: "1.5rem",
+    gap: "1.25rem",
   },
   preview: {
     flex: "1 1 280px",
     minWidth: "260px",
-    background: "rgba(15, 23, 42, 0.5)",
-    borderRadius: "24px",
-    border: "1px solid var(--border-glass)",
+    background: "rgba(30, 41, 59, 0.7)",
+    borderRadius: "16px",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
     padding: "1.25rem",
-    boxShadow: "var(--shadow-soft)",
-    backdropFilter: "blur(24px)",
+    boxShadow: "0 8px 32px -8px rgba(0, 0, 0, 0.3)",
+    backdropFilter: "blur(20px)",
   },
   previewImage: {
     width: "100%",
     height: "auto",
-    borderRadius: "18px",
-    border: "1px solid rgba(255, 255, 255, 0.2)",
-    boxShadow: "0 12px 30px -22px rgba(15, 23, 42, 0.85)",
+    borderRadius: "12px",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    boxShadow: "0 8px 24px -8px rgba(0, 0, 0, 0.4)",
   },
   previewPlaceholder: {
-    padding: "2.5rem 1.5rem",
+    padding: "2rem 1.5rem",
     textAlign: "center",
-    color: "var(--color-subtle)",
-    border: "1px dashed rgba(255, 255, 255, 0.25)",
-    borderRadius: "18px",
-    background: "rgba(15, 23, 42, 0.35)",
+    color: "#64748b",
+    border: "1px dashed rgba(148, 163, 184, 0.3)",
+    borderRadius: "12px",
+    background: "rgba(15, 23, 42, 0.4)",
   },
   mappingPanel: {
-    border: "1px solid var(--border-glass)",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
     padding: "1rem",
-    borderRadius: "20px",
-    background: "rgba(15, 23, 42, 0.4)",
-    boxShadow: "var(--shadow-soft)",
-    backdropFilter: "blur(24px)",
+    borderRadius: "16px",
+    background: "rgba(30, 41, 59, 0.7)",
+    boxShadow: "0 8px 32px -8px rgba(0, 0, 0, 0.3)",
+    backdropFilter: "blur(20px)",
   },
   mappingRow: {
     display: "flex",
@@ -2178,20 +2614,19 @@ const styles: Record<string, React.CSSProperties> = {
   },
   smallLabel: {
     fontSize: "0.85rem",
-    color: "var(--color-muted)",
+    color: "#94a3b8",
     fontWeight: 500,
-    letterSpacing: "0.01em",
   },
   tableWrapper: {
     flex: "2 1 400px",
     minWidth: "320px",
-    background: "rgba(15, 23, 42, 0.55)",
-    borderRadius: "24px",
-    border: "1px solid var(--border-glass)",
+    background: "rgba(30, 41, 59, 0.7)",
+    borderRadius: "16px",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
     padding: "1.25rem",
     overflow: "auto",
-    boxShadow: "var(--shadow-soft)",
-    backdropFilter: "blur(24px)",
+    boxShadow: "0 8px 32px -8px rgba(0, 0, 0, 0.3)",
+    backdropFilter: "blur(20px)",
   },
   table: {
     width: "100%",
@@ -2199,17 +2634,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
   th: {
     textAlign: "left",
-    borderBottom: "1px solid rgba(255, 255, 255, 0.15)",
-    padding: "0.6rem",
-    backgroundColor: "rgba(148, 163, 184, 0.18)",
+    borderBottom: "1px solid rgba(148, 163, 184, 0.2)",
+    padding: "0.6rem 0.75rem",
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
     fontWeight: 600,
+    fontSize: "0.85rem",
+    color: "#e2e8f0",
   },
   td: {
-    padding: "0.6rem",
-    borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+    padding: "0.6rem 0.75rem",
+    borderBottom: "1px solid rgba(148, 163, 184, 0.1)",
     verticalAlign: "top",
     wordBreak: "break-word",
-    color: "var(--color-foreground)",
+    color: "#cbd5e1",
+    fontSize: "0.85rem",
   },
 };
 

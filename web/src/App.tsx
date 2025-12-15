@@ -39,11 +39,11 @@ const DEFAULT_TEMPLATE_DATA_URL = (() => {
 function createDefaultTemplate(): TemplateDef {
   const width = 1200;
   const height = 1600;
-  
+
   console.log('🖼️ Creating default template with data URL');
   console.log('📏 Data URL length:', DEFAULT_TEMPLATE_DATA_URL.length);
   console.log('✅ Starts with data:?', DEFAULT_TEMPLATE_DATA_URL.startsWith('data:'));
-  
+
   const img = new Image();
   img.src = DEFAULT_TEMPLATE_DATA_URL;
 
@@ -76,9 +76,9 @@ export const App: React.FC = () => {
             <span className="app-badge">Flujo líquido</span>
             <h1 className="app-title">Plantilla Auto QR</h1>
             <p className="app-description">
-              Organiza y exporta tus plantillas con una interfaz inspirada en iOS: arrastra tu CSV,
-              sube los códigos QR y configura la plantilla en un entorno de vidrio líquido y
-              reflejos suaves.
+              Genera plantillas QR de forma rápida y profesional. Arrastra tu CSV,
+              sube los códigos QR y personaliza el diseño con nuestra interfaz moderna
+              y elegante.
             </p>
           </header>
           <EmplantilladorQR template={template} />

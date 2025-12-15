@@ -125,30 +125,30 @@ async function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     // Convertir blob a data URL para evitar problemas de revocación
     const reader = new FileReader();
-    
+
     reader.onload = (e) => {
       const result = e.target?.result;
       if (typeof result === 'string') {
         const image = new Image();
-        
+
         image.onload = () => {
           resolve(image);
         };
-        
+
         image.onerror = () => {
           reject(new Error("No se pudo cargar la imagen del QR subido"));
         };
-        
+
         image.src = result;
       } else {
         reject(new Error("Error al convertir blob a data URL"));
       }
     };
-    
+
     reader.onerror = () => {
       reject(new Error("Error al leer el archivo QR"));
     };
-    
+
     reader.readAsDataURL(blob);
   });
 }
@@ -201,13 +201,13 @@ export async function parseCsvToItems(
     const isInteger = /^-?\d+$/.test(numeroTrim);
     const hasLeadingZeros = /^-?0\d+/.test(numeroTrim);
     const numeroValue = isInteger && !hasLeadingZeros ? Number(numeroTrim) : numeroTrim;
-    
+
     // Si nombreArchivoSalida está vacío, usar el numero como nombre de salida
-    const nombreArchivoSalidaTrim = typeof nombreArchivoSalidaRaw === "string" 
-      ? nombreArchivoSalidaRaw.trim() 
+    const nombreArchivoSalidaTrim = typeof nombreArchivoSalidaRaw === "string"
+      ? nombreArchivoSalidaRaw.trim()
       : `${nombreArchivoSalidaRaw}`.trim();
     const nombreArchivoSalida = nombreArchivoSalidaTrim || numeroTrim;
-    
+
     items.push({
       numero: numeroValue,
       enlace,
@@ -341,13 +341,13 @@ export function prepareTemplateForItem(template: TemplateDef, item: Item): Templ
   if (!template.labelBox) {
     return template;
   }
-  
+
   // Siempre usar el nombreArchivoSalida del item específico para la etiqueta
   // Esto asegura que cada item tenga su propio texto único
   const nombre = item.nombreArchivoSalida?.trim();
   const fallback = nombre && nombre.length > 0 ? nombre : normalizeNumero(item.numero);
   const prettified = prettifyLabelText(fallback);
-  
+
   // Siempre crear una nueva plantilla con el texto del item actual
   return { ...template, labelText: prettified };
 }
@@ -361,15 +361,15 @@ export function placeQROnTemplate(
   if (!ctx) {
     throw new Error("No se pudo obtener el contexto 2D de la plantilla");
   }
-  
+
   // Usar las dimensiones exactas del frame sin centrar
   const dx = frame.x;
   const dy = frame.y;
   const drawWidth = frame.w;
   const drawHeight = frame.h;
-  
+
   // QR positioning logs cleaned
-  
+
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
@@ -384,7 +384,11 @@ function drawTemplateBase(canvas: HTMLCanvasElement, template: TemplateDef): voi
   }
   const source = template.baseImage;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
+
+  // Fill with white background first (for SVGs without defined background)
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   // Dibujar la imagen base manteniendo las dimensiones exactas
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
 }
@@ -398,15 +402,17 @@ export async function renderItem(
     isTransparentBackground?: boolean;
     fontSize?: number;
     isBold?: boolean;
+    isItalic?: boolean;
+    fontFamily?: string;
+    textAlign?: 'left' | 'center' | 'right';
+    lineHeight?: number;
+    letterSpacing?: number;
   }
 ): Promise<HTMLCanvasElement> {
   const baseDims = templateDef.size ?? getSourceDimensions(templateDef.baseImage);
   const canvas = createCanvas(baseDims.width, baseDims.height);
-  
-  console.log('🎯 EXPORT: Canvas size:', { width: canvas.width, height: canvas.height });
-  console.log('🎯 EXPORT: QR frame:', templateDef.frame);
-  console.log('🎯 EXPORT: Label box:', templateDef.labelBox);
-  
+
+
   drawTemplateBase(canvas, templateDef);
   const qrSize = Math.round(Math.max(templateDef.frame.w, templateDef.frame.h));
   const qrCanvas = await getQRForItem(item, qrIndex, qrSize);
@@ -417,35 +423,75 @@ export async function renderItem(
     if (ctx) {
       const lb = templateDef.labelBox;
       ctx.save();
-      
+
       // draw background for label only if not transparent
       if (!options?.isTransparentBackground) {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(lb.x, lb.y, lb.w, lb.h);
       }
-      
+
       // draw text with user preferences
       const fontSize = options?.fontSize ?? Math.max(10, Math.floor(lb.h * 0.6));
-      
+      const fontFamily = options?.fontFamily ?? 'sans-serif';
+      const fontWeight = options?.isBold ? "bold" : "normal";
+      const fontStyle = options?.isItalic ? "italic" : "normal";
+      const textAlignOption = options?.textAlign ?? 'center';
+      const letterSpacing = options?.letterSpacing ?? 0;
+
       // Convert hex color to RGB if provided
       let textColor = "#000000"; // default black
       if (options?.textColor) {
         textColor = options.textColor;
       }
-      
+
       ctx.fillStyle = textColor;
-      const fontWeight = options?.isBold ? "bold" : "normal";
-      ctx.font = `${fontWeight} ${fontSize}px sans-serif`;
-      ctx.textAlign = "center";
+      ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+      ctx.textAlign = textAlignOption;
       ctx.textBaseline = "middle";
-      const textX = lb.x + lb.w / 2;
-      const textY = lb.y + lb.h / 2;
-      
-      // Text positioning logs cleaned
-      
-      // clip to label width
+
+      // Apply letter-spacing by drawing characters individually if needed
+      const text = templateDef.labelText;
       const maxWidth = Math.max(10, lb.w - 8);
-      ctx.fillText(templateDef.labelText, textX, textY, maxWidth);
+
+      // Calculate text X position based on alignment
+      let textX: number;
+      if (textAlignOption === 'left') {
+        textX = lb.x + 4;
+      } else if (textAlignOption === 'right') {
+        textX = lb.x + lb.w - 4;
+      } else {
+        textX = lb.x + lb.w / 2;
+      }
+      const textY = lb.y + lb.h / 2;
+
+      if (letterSpacing !== 0) {
+        // Draw with letter spacing
+        ctx.textAlign = 'left';
+        const chars = text.split('');
+        let totalWidth = 0;
+        chars.forEach(char => {
+          totalWidth += ctx.measureText(char).width + letterSpacing;
+        });
+        totalWidth -= letterSpacing; // Remove last spacing
+
+        let startX: number;
+        if (textAlignOption === 'center') {
+          startX = lb.x + (lb.w - Math.min(totalWidth, maxWidth)) / 2;
+        } else if (textAlignOption === 'right') {
+          startX = lb.x + lb.w - 4 - Math.min(totalWidth, maxWidth);
+        } else {
+          startX = lb.x + 4;
+        }
+
+        let currentX = startX;
+        for (const char of chars) {
+          if (currentX - startX > maxWidth) break;
+          ctx.fillText(char, currentX, textY);
+          currentX += ctx.measureText(char).width + letterSpacing;
+        }
+      } else {
+        ctx.fillText(text, textX, textY, maxWidth);
+      }
       ctx.restore();
     }
   }
@@ -574,155 +620,102 @@ export async function exportPrintPDF(
     isTransparentBackground?: boolean;
     fontSize?: number;
     isBold?: boolean;
+    outputWidthCm?: number;
+    outputHeightCm?: number;
+    showCropMarks?: boolean;
+    bleedMm?: number;
   }
 ): Promise<Blob> {
-  // Constantes de conversión
-  const MM_TO_PT = 2.83465; // 1 mm = 2.83465 puntos
-  const CROP_MARK_LENGTH_MM = 2; // marcas de corte de 2mm
-  const CROP_MARK_OFFSET_MM = 1; // separación de 1mm entre imagen y marcas
-  
-  // Renderizar el primer item para obtener las dimensiones
+  const MM_TO_PT = 2.83465;
+  const CM_TO_MM = 10;
+  const CROP_MARK_LENGTH_MM = 2;
+  const CROP_MARK_OFFSET_MM = 1;
+  const showCropMarks = options?.showCropMarks ?? false;
+
   const firstTemplateForItem = prepareTemplateForItem(template, items[0]);
   const firstCanvas = await renderItem(items[0], qrIndex, firstTemplateForItem, options);
-  
-  // Conversión correcta: 827px = 70mm → 1px = 0.08464mm (aprox. 300 DPI)
-  // La imagen YA incluye el sangrado de 3mm, así que no lo añadimos
-  const PX_TO_MM = 70 / 827; // Relación específica para estas plantillas
-  const designWidthMM = firstCanvas.width * PX_TO_MM;
-  const designHeightMM = firstCanvas.height * PX_TO_MM;
-  
-  // Dimensiones totales de página (imagen + 3mm por lado para marcas = 76mm total)
-  const pageWidthMM = designWidthMM + (2 * (CROP_MARK_LENGTH_MM + CROP_MARK_OFFSET_MM));
-  const pageHeightMM = designHeightMM + (2 * (CROP_MARK_LENGTH_MM + CROP_MARK_OFFSET_MM));
-  
-  // Convertir a puntos para jsPDF
+
+  let designWidthMM: number;
+  let designHeightMM: number;
+
+  if (options?.outputWidthCm && options?.outputHeightCm && options.outputWidthCm > 0 && options.outputHeightCm > 0) {
+    designWidthMM = options.outputWidthCm * CM_TO_MM;
+    designHeightMM = options.outputHeightCm * CM_TO_MM;
+  } else {
+    const PX_TO_MM = 70 / 827;
+    designWidthMM = firstCanvas.width * PX_TO_MM;
+    designHeightMM = firstCanvas.height * PX_TO_MM;
+  }
+
+  const marginMM = showCropMarks ? (CROP_MARK_LENGTH_MM + CROP_MARK_OFFSET_MM) : 0;
+  const pageWidthMM = designWidthMM + (2 * marginMM);
+  const pageHeightMM = designHeightMM + (2 * marginMM);
+
   const pageWidthPt = pageWidthMM * MM_TO_PT;
   const pageHeightPt = pageHeightMM * MM_TO_PT;
   const cropMarkLengthPt = CROP_MARK_LENGTH_MM * MM_TO_PT;
   const cropMarkOffsetPt = CROP_MARK_OFFSET_MM * MM_TO_PT;
   const designWidthPt = designWidthMM * MM_TO_PT;
   const designHeightPt = designHeightMM * MM_TO_PT;
-  
-  console.log('📄 PDF SIZE CALCULATION:');
-  console.log('  Image:', firstCanvas.width, 'x', firstCanvas.height, 'px');
-  console.log('  Design (with bleed):', designWidthMM.toFixed(2), 'x', designHeightMM.toFixed(2), 'mm');
-  console.log('  + Marks (5mm+2mm):', pageWidthMM.toFixed(2), 'x', pageHeightMM.toFixed(2), 'mm');
-  
-  // Crear el PDF
+  const marginPt = marginMM * MM_TO_PT;
+
   const pdf = new jsPDF({
     orientation: pageWidthPt >= pageHeightPt ? "landscape" : "portrait",
     unit: "pt",
     format: [pageWidthPt, pageHeightPt],
   });
-  
+
   let isFirstPage = true;
-  
+
   for (const item of items) {
     try {
       if (!isFirstPage) {
         pdf.addPage([pageWidthPt, pageHeightPt]);
       }
       isFirstPage = false;
-      
+
       const templateForItem = prepareTemplateForItem(template, item);
       const canvas = await renderItem(item, qrIndex, templateForItem, options);
       const dataUrl = canvas.toDataURL("image/png");
-      
-      // Posición de la imagen: centrada con espacio para marcas
-      const imageX = cropMarkLengthPt + cropMarkOffsetPt;
-      const imageY = cropMarkLengthPt + cropMarkOffsetPt;
-      
-      // Dibujar la imagen en su tamaño real
-      pdf.addImage(
-        dataUrl,
-        "PNG",
-        imageX,
-        imageY,
-        designWidthPt,
-        designHeightPt
-      );
-      
-      // Dibujar marcas de corte
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.5);
-      
-      // Coordenadas del área de corte final (borde de la imagen sin sangrado)
-      const cropLeft = imageX;
-      const cropRight = imageX + designWidthPt;
-      const cropTop = imageY;
-      const cropBottom = imageY + designHeightPt;
-      
-      // Marcas de corte en las 4 esquinas
-      // Esquina superior izquierda
-      pdf.line(
-        cropLeft - cropMarkOffsetPt - cropMarkLengthPt,
-        cropTop,
-        cropLeft - cropMarkOffsetPt,
-        cropTop
-      ); // horizontal
-      pdf.line(
-        cropLeft,
-        cropTop - cropMarkOffsetPt - cropMarkLengthPt,
-        cropLeft,
-        cropTop - cropMarkOffsetPt
-      ); // vertical
-      
-      // Esquina superior derecha
-      pdf.line(
-        cropRight + cropMarkOffsetPt,
-        cropTop,
-        cropRight + cropMarkOffsetPt + cropMarkLengthPt,
-        cropTop
-      ); // horizontal
-      pdf.line(
-        cropRight,
-        cropTop - cropMarkOffsetPt - cropMarkLengthPt,
-        cropRight,
-        cropTop - cropMarkOffsetPt
-      ); // vertical
-      
-      // Esquina inferior izquierda
-      pdf.line(
-        cropLeft - cropMarkOffsetPt - cropMarkLengthPt,
-        cropBottom,
-        cropLeft - cropMarkOffsetPt,
-        cropBottom
-      ); // horizontal
-      pdf.line(
-        cropLeft,
-        cropBottom + cropMarkOffsetPt,
-        cropLeft,
-        cropBottom + cropMarkOffsetPt + cropMarkLengthPt
-      ); // vertical
-      
-      // Esquina inferior derecha
-      pdf.line(
-        cropRight + cropMarkOffsetPt,
-        cropBottom,
-        cropRight + cropMarkOffsetPt + cropMarkLengthPt,
-        cropBottom
-      ); // horizontal
-      pdf.line(
-        cropRight,
-        cropBottom + cropMarkOffsetPt,
-        cropRight,
-        cropBottom + cropMarkOffsetPt + cropMarkLengthPt
-      ); // vertical
-      
+
+      const imageX = marginPt;
+      const imageY = marginPt;
+
+      pdf.addImage(dataUrl, "PNG", imageX, imageY, designWidthPt, designHeightPt);
+
+      if (showCropMarks) {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.5);
+
+        const cropLeft = imageX;
+        const cropRight = imageX + designWidthPt;
+        const cropTop = imageY;
+        const cropBottom = imageY + designHeightPt;
+
+        pdf.line(cropLeft - cropMarkOffsetPt - cropMarkLengthPt, cropTop, cropLeft - cropMarkOffsetPt, cropTop);
+        pdf.line(cropLeft, cropTop - cropMarkOffsetPt - cropMarkLengthPt, cropLeft, cropTop - cropMarkOffsetPt);
+        pdf.line(cropRight + cropMarkOffsetPt, cropTop, cropRight + cropMarkOffsetPt + cropMarkLengthPt, cropTop);
+        pdf.line(cropRight, cropTop - cropMarkOffsetPt - cropMarkLengthPt, cropRight, cropTop - cropMarkOffsetPt);
+        pdf.line(cropLeft - cropMarkOffsetPt - cropMarkLengthPt, cropBottom, cropLeft - cropMarkOffsetPt, cropBottom);
+        pdf.line(cropLeft, cropBottom + cropMarkOffsetPt, cropLeft, cropBottom + cropMarkOffsetPt + cropMarkLengthPt);
+        pdf.line(cropRight + cropMarkOffsetPt, cropBottom, cropRight + cropMarkOffsetPt + cropMarkLengthPt, cropBottom);
+        pdf.line(cropRight, cropBottom + cropMarkOffsetPt, cropRight, cropBottom + cropMarkOffsetPt + cropMarkLengthPt);
+      }
     } catch (error) {
-      console.error(`Error procesando item para PDF de impresión:`, error);
+      console.error(`Error procesando item para PDF:`, error);
     }
   }
-  
+
   return pdf.output("blob");
 }
 
+
 function triggerDownload(blob: Blob, nombre: string, formato: "png" | "pdf"): void {
   const extension = formato === "png" ? ".png" : ".pdf";
-  
+
   // Usar FileReader para convertir a data URL
   const reader = new FileReader();
-  reader.onload = function() {
+  reader.onload = function () {
     const dataUrl = reader.result as string;
     const anchor = document.createElement("a");
     anchor.href = dataUrl;
