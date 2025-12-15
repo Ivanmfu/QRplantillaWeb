@@ -36,10 +36,14 @@ export type TemplateDef = {
   baseImage: CanvasImageSource;
   /** Optional override for the size of the output canvas */
   size?: { width: number; height: number };
+  /** Original file dimensions - used to ensure exports match the original template size */
+  originalSize?: { width: number; height: number };
   frame: Frame;
   labelBox?: Frame;
   labelText?: string;
-  exportFormat?: "png" | "pdf";
+  exportFormat?: "png" | "pdf" | "svg";
+  /** Optional original or processed SVG source when template is vectorial */
+  svgContent?: string;
 };
 
 export type ProcessResult = {
