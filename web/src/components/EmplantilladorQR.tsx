@@ -1172,6 +1172,30 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         status: 'Generando PDF con marcas de corte...'
       }));
 
+      // Calcular dimensiones de salida según el preset
+      let outputWidthCm = 0;
+      let outputHeightCm = 0;
+      
+      if (sizePreset === 'original') {
+        // Mantener tamaño original (0, 0 indica uso de dimensiones de píxel)
+        outputWidthCm = 0;
+        outputHeightCm = 0;
+      } else if (sizePreset === 'custom') {
+        // Usar valores personalizados
+        if (sizeUnit === 'cm') {
+          outputWidthCm = customWidthCm;
+          outputHeightCm = customHeightCm;
+        } else {
+          // Convertir px a cm (asumiendo 96 DPI para pantalla, 1 inch = 2.54 cm)
+          outputWidthCm = (customWidthCm / 96) * 2.54;
+          outputHeightCm = (customHeightCm / 96) * 2.54;
+        }
+      } else {
+        // Usar preset predefinido
+        outputWidthCm = SIZE_PRESETS[sizePreset].width;
+        outputHeightCm = SIZE_PRESETS[sizePreset].height;
+      }
+
       const renderOptions = {
         textColor,
         isTransparentBackground,
@@ -1181,7 +1205,11 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
         fontFamily,
         textAlign,
         lineHeight,
-        letterSpacing
+        letterSpacing,
+        outputWidthCm,
+        outputHeightCm,
+        showCropMarks,
+        bleedMm
       };
 
       const pdfBlob = await exportPrintPDF(workItems, qrIndex, activeTemplate, renderOptions);
@@ -1227,7 +1255,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
       }));
       setStatus({ type: "error", text: `Error al generar PDF: ${message}` });
     }
-  }, [workItems, qrIndex, activeTemplate, textColor, isTransparentBackground, fontSize, isBold]);
+  }, [workItems, qrIndex, activeTemplate, textColor, isTransparentBackground, fontSize, isBold, isItalic, fontFamily, textAlign, lineHeight, letterSpacing, sizePreset, sizeUnit, customWidthCm, customHeightCm, showCropMarks, bleedMm]);
 
   const resultsMap = useMemo(() => {
     const map = new Map<string, ProcessResult>();
@@ -1432,7 +1460,7 @@ export const EmplantilladorQR: React.FC<EmplantilladorQRProps> = ({
 
           <button
             type="button"
-            onClick={handleExportZip}
+            onClick={selectedExportFormat === 'pdf' ? handleExportPrintPDF : handleExportZip}
             disabled={processing}
             style={{
               padding: '10px 24px',
